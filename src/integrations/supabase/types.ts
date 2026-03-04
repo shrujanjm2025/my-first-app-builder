@@ -14,7 +14,210 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      budgets: {
+        Row: {
+          allocated_amount: number
+          category: string
+          created_at: string
+          id: string
+          month: string
+          user_id: string
+        }
+        Insert: {
+          allocated_amount: number
+          category: string
+          created_at?: string
+          id?: string
+          month: string
+          user_id: string
+        }
+        Update: {
+          allocated_amount?: number
+          category?: string
+          created_at?: string
+          id?: string
+          month?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      goals: {
+        Row: {
+          created_at: string
+          current_amount: number
+          id: string
+          inflation_rate: number | null
+          investment_return: number | null
+          name: string
+          target_amount: number
+          target_date: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_amount?: number
+          id?: string
+          inflation_rate?: number | null
+          investment_return?: number | null
+          name: string
+          target_amount: number
+          target_date: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          current_amount?: number
+          id?: string
+          inflation_rate?: number | null
+          investment_return?: number | null
+          name?: string
+          target_amount?: number
+          target_date?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      insurance_policies: {
+        Row: {
+          coverage_amount: number | null
+          created_at: string
+          id: string
+          name: string
+          policy_number: string | null
+          premium: number
+          premium_frequency: string
+          renewal_date: string | null
+          type: string
+          user_id: string
+        }
+        Insert: {
+          coverage_amount?: number | null
+          created_at?: string
+          id?: string
+          name: string
+          policy_number?: string | null
+          premium: number
+          premium_frequency?: string
+          renewal_date?: string | null
+          type: string
+          user_id: string
+        }
+        Update: {
+          coverage_amount?: number | null
+          created_at?: string
+          id?: string
+          name?: string
+          policy_number?: string | null
+          premium?: number
+          premium_frequency?: string
+          renewal_date?: string | null
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      loans: {
+        Row: {
+          created_at: string
+          emi: number
+          id: string
+          interest_rate: number
+          name: string
+          outstanding_balance: number
+          principal: number
+          start_date: string
+          tenure_months: number
+          type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          emi: number
+          id?: string
+          interest_rate: number
+          name: string
+          outstanding_balance: number
+          principal: number
+          start_date: string
+          tenure_months: number
+          type: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          emi?: number
+          id?: string
+          interest_rate?: number
+          name?: string
+          outstanding_balance?: number
+          principal?: number
+          start_date?: string
+          tenure_months?: number
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          currency: string | null
+          full_name: string | null
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          currency?: string | null
+          full_name?: string | null
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          currency?: string | null
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      transactions: {
+        Row: {
+          amount: number
+          category: string
+          created_at: string
+          date: string
+          description: string | null
+          id: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          category: string
+          created_at?: string
+          date?: string
+          description?: string | null
+          id?: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          category?: string
+          created_at?: string
+          date?: string
+          description?: string | null
+          id?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

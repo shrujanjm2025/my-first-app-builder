@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      bank_accounts: {
+        Row: {
+          account_number: string | null
+          account_type: string
+          balance: number
+          bank_name: string
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          account_number?: string | null
+          account_type?: string
+          balance?: number
+          bank_name: string
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          account_number?: string | null
+          account_type?: string
+          balance?: number
+          bank_name?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       budgets: {
         Row: {
           allocated_amount: number
@@ -37,6 +67,39 @@ export type Database = {
           created_at?: string
           id?: string
           month?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      fixed_deposits: {
+        Row: {
+          amount: number
+          bank_name: string
+          created_at: string
+          id: string
+          interest_rate: number
+          maturity_date: string
+          start_date: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          bank_name: string
+          created_at?: string
+          id?: string
+          interest_rate: number
+          maturity_date: string
+          start_date: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          bank_name?: string
+          created_at?: string
+          id?: string
+          interest_rate?: number
+          maturity_date?: string
+          start_date?: string
           user_id?: string
         }
         Relationships: []
@@ -162,26 +225,74 @@ export type Database = {
         Row: {
           avatar_url: string | null
           created_at: string
+          credit_score: number | null
           currency: string | null
+          dependents: number | null
           full_name: string | null
           id: string
+          monthly_salary: number | null
+          onboarding_completed: boolean | null
           updated_at: string
         }
         Insert: {
           avatar_url?: string | null
           created_at?: string
+          credit_score?: number | null
           currency?: string | null
+          dependents?: number | null
           full_name?: string | null
           id: string
+          monthly_salary?: number | null
+          onboarding_completed?: boolean | null
           updated_at?: string
         }
         Update: {
           avatar_url?: string | null
           created_at?: string
+          credit_score?: number | null
           currency?: string | null
+          dependents?: number | null
           full_name?: string | null
           id?: string
+          monthly_salary?: number | null
+          onboarding_completed?: boolean | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      recurring_deposits: {
+        Row: {
+          bank_name: string
+          created_at: string
+          id: string
+          interest_rate: number
+          maturity_date: string
+          monthly_amount: number
+          start_date: string
+          total_deposited: number
+          user_id: string
+        }
+        Insert: {
+          bank_name: string
+          created_at?: string
+          id?: string
+          interest_rate: number
+          maturity_date: string
+          monthly_amount: number
+          start_date: string
+          total_deposited?: number
+          user_id: string
+        }
+        Update: {
+          bank_name?: string
+          created_at?: string
+          id?: string
+          interest_rate?: number
+          maturity_date?: string
+          monthly_amount?: number
+          start_date?: string
+          total_deposited?: number
+          user_id?: string
         }
         Relationships: []
       }

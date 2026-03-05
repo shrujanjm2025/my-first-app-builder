@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Calculator, TrendingUp, Percent, DollarSign } from "lucide-react";
+import { Calculator, TrendingUp, Percent, DollarSign, Clock } from "lucide-react";
 
 export default function Calculators() {
   return (
@@ -22,6 +22,7 @@ export default function Calculators() {
             <TabsTrigger value="cur">Credit Utilization</TabsTrigger>
             <TabsTrigger value="dti">Debt-to-Income</TabsTrigger>
             <TabsTrigger value="networth">Net Worth</TabsTrigger>
+            <TabsTrigger value="retirement">Retirement</TabsTrigger>
           </TabsList>
 
           <TabsContent value="compound"><CompoundInterestCalc /></TabsContent>
@@ -29,6 +30,7 @@ export default function Calculators() {
           <TabsContent value="cur"><CURCalc /></TabsContent>
           <TabsContent value="dti"><DTICalc /></TabsContent>
           <TabsContent value="networth"><NetWorthCalc /></TabsContent>
+          <TabsContent value="retirement"><RetirementCalc /></TabsContent>
         </Tabs>
       </div>
     </DashboardLayout>
@@ -59,9 +61,9 @@ function CompoundInterestCalc() {
           <div className="space-y-2"><Label>Compounding (per year)</Label><Input type="number" value={n} onChange={(e) => setN(e.target.value)} /></div>
         </div>
         <div className="grid sm:grid-cols-3 gap-4 pt-4 border-t">
-          <div><p className="text-sm text-muted-foreground">Future Value</p><p className="text-xl font-bold text-primary" style={{ fontFamily: 'Space Grotesk' }}>${amount.toFixed(2)}</p></div>
-          <div><p className="text-sm text-muted-foreground">Interest Earned</p><p className="text-xl font-bold text-[hsl(var(--success))]" style={{ fontFamily: 'Space Grotesk' }}>${interest.toFixed(2)}</p></div>
-          <div><p className="text-sm text-muted-foreground">Total Growth</p><p className="text-xl font-bold" style={{ fontFamily: 'Space Grotesk' }}>{((amount / principal - 1) * 100).toFixed(1)}%</p></div>
+          <div><p className="text-sm text-muted-foreground">Future Value</p><p className="text-xl font-bold text-primary font-heading">${amount.toFixed(2)}</p></div>
+          <div><p className="text-sm text-muted-foreground">Interest Earned</p><p className="text-xl font-bold text-[hsl(var(--success))] font-heading">${interest.toFixed(2)}</p></div>
+          <div><p className="text-sm text-muted-foreground">Total Growth</p><p className="text-xl font-bold font-heading">{principal > 0 ? ((amount / principal - 1) * 100).toFixed(1) : 0}%</p></div>
         </div>
       </CardContent>
     </Card>
@@ -90,9 +92,9 @@ function EMICalc() {
           <div className="space-y-2"><Label>Tenure (months)</Label><Input type="number" value={m} onChange={(e) => setM(e.target.value)} /></div>
         </div>
         <div className="grid sm:grid-cols-3 gap-4 pt-4 border-t">
-          <div><p className="text-sm text-muted-foreground">Monthly EMI</p><p className="text-xl font-bold text-primary" style={{ fontFamily: 'Space Grotesk' }}>${emi.toFixed(2)}</p></div>
-          <div><p className="text-sm text-muted-foreground">Total Interest</p><p className="text-xl font-bold text-destructive" style={{ fontFamily: 'Space Grotesk' }}>${totalInterest.toFixed(2)}</p></div>
-          <div><p className="text-sm text-muted-foreground">Total Payment</p><p className="text-xl font-bold" style={{ fontFamily: 'Space Grotesk' }}>${totalPayment.toFixed(2)}</p></div>
+          <div><p className="text-sm text-muted-foreground">Monthly EMI</p><p className="text-xl font-bold text-primary font-heading">${emi.toFixed(2)}</p></div>
+          <div><p className="text-sm text-muted-foreground">Total Interest</p><p className="text-xl font-bold text-destructive font-heading">${totalInterest.toFixed(2)}</p></div>
+          <div><p className="text-sm text-muted-foreground">Total Payment</p><p className="text-xl font-bold font-heading">${totalPayment.toFixed(2)}</p></div>
         </div>
       </CardContent>
     </Card>
@@ -120,10 +122,10 @@ function CURCalc() {
         </div>
         <div className="pt-4 border-t">
           <p className="text-sm text-muted-foreground">Your CUR</p>
-          <p className={`text-3xl font-bold ${cur <= 30 ? 'text-[hsl(var(--success))]' : cur <= 50 ? 'text-[hsl(var(--warning))]' : 'text-destructive'}`} style={{ fontFamily: 'Space Grotesk' }}>
+          <p className={`text-3xl font-bold font-heading ${cur <= 30 ? "text-[hsl(var(--success))]" : cur <= 50 ? "text-[hsl(var(--warning))]" : "text-destructive"}`}>
             {cur.toFixed(1)}%
           </p>
-          <p className="text-sm text-muted-foreground mt-1">{cur <= 30 ? '✅ Great! Keep it up.' : cur <= 50 ? '⚠️ Consider paying down some balances.' : '🚨 High utilization — this may hurt your credit score.'}</p>
+          <p className="text-sm text-muted-foreground mt-1">{cur <= 30 ? "✅ Great! Keep it up." : cur <= 50 ? "⚠️ Consider paying down some balances." : "🚨 High utilization — this may hurt your credit score."}</p>
         </div>
       </CardContent>
     </Card>
@@ -151,10 +153,10 @@ function DTICalc() {
         </div>
         <div className="pt-4 border-t">
           <p className="text-sm text-muted-foreground">Your DTI</p>
-          <p className={`text-3xl font-bold ${dti <= 36 ? 'text-[hsl(var(--success))]' : dti <= 50 ? 'text-[hsl(var(--warning))]' : 'text-destructive'}`} style={{ fontFamily: 'Space Grotesk' }}>
+          <p className={`text-3xl font-bold font-heading ${dti <= 36 ? "text-[hsl(var(--success))]" : dti <= 50 ? "text-[hsl(var(--warning))]" : "text-destructive"}`}>
             {dti.toFixed(1)}%
           </p>
-          <p className="text-sm text-muted-foreground mt-1">{dti <= 36 ? '✅ Healthy ratio.' : dti <= 50 ? '⚠️ Getting high. Reduce debt if possible.' : '🚨 Very high — lenders may decline applications.'}</p>
+          <p className="text-sm text-muted-foreground mt-1">{dti <= 36 ? "✅ Healthy ratio." : dti <= 50 ? "⚠️ Getting high. Reduce debt if possible." : "🚨 Very high — lenders may decline applications."}</p>
         </div>
       </CardContent>
     </Card>
@@ -179,9 +181,77 @@ function NetWorthCalc() {
         </div>
         <div className="pt-4 border-t">
           <p className="text-sm text-muted-foreground">Net Worth</p>
-          <p className={`text-3xl font-bold ${nw >= 0 ? 'text-[hsl(var(--success))]' : 'text-destructive'}`} style={{ fontFamily: 'Space Grotesk' }}>
-            ${nw.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+          <p className={`text-3xl font-bold font-heading ${nw >= 0 ? "text-[hsl(var(--success))]" : "text-destructive"}`}>
+            ${nw.toLocaleString("en-US", { minimumFractionDigits: 2 })}
           </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function RetirementCalc() {
+  const [currentAge, setCurrentAge] = useState("30");
+  const [retireAge, setRetireAge] = useState("60");
+  const [monthlyExpense, setMonthlyExpense] = useState("30000");
+  const [currentSavings, setCurrentSavings] = useState("500000");
+  const [returnRate, setReturnRate] = useState("10");
+  const [inflationRate, setInflationRate] = useState("6");
+
+  const years = (parseInt(retireAge) || 60) - (parseInt(currentAge) || 30);
+  const monthlyExp = parseFloat(monthlyExpense) || 0;
+  const inflation = parseFloat(inflationRate) || 6;
+  const returnR = parseFloat(returnRate) || 10;
+  const savings = parseFloat(currentSavings) || 0;
+
+  // Future monthly expense at retirement
+  const futureMonthly = monthlyExp * Math.pow(1 + inflation / 100, years);
+  // Corpus needed (25x annual expenses — 4% rule)
+  const corpusNeeded = futureMonthly * 12 * 25;
+  // Future value of current savings
+  const futureSavings = savings * Math.pow(1 + returnR / 100, years);
+  const gap = corpusNeeded - futureSavings;
+  // Monthly SIP needed
+  const r = returnR / 100 / 12;
+  const months = years * 12;
+  const monthlySIP = gap > 0 && r > 0 ? gap / ((Math.pow(1 + r, months) - 1) / r) : 0;
+
+  return (
+    <Card className="shadow-soft border-0">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2"><Clock className="h-5 w-5 text-primary" />Retirement Planning</CardTitle>
+        <CardDescription>Plan your retirement corpus using the 4% rule</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid sm:grid-cols-3 gap-4">
+          <div className="space-y-2"><Label>Current Age</Label><Input type="number" value={currentAge} onChange={e => setCurrentAge(e.target.value)} /></div>
+          <div className="space-y-2"><Label>Retirement Age</Label><Input type="number" value={retireAge} onChange={e => setRetireAge(e.target.value)} /></div>
+          <div className="space-y-2"><Label>Monthly Expenses ($)</Label><Input type="number" value={monthlyExpense} onChange={e => setMonthlyExpense(e.target.value)} /></div>
+        </div>
+        <div className="grid sm:grid-cols-3 gap-4">
+          <div className="space-y-2"><Label>Current Savings ($)</Label><Input type="number" value={currentSavings} onChange={e => setCurrentSavings(e.target.value)} /></div>
+          <div className="space-y-2"><Label>Expected Return (%)</Label><Input type="number" step="0.1" value={returnRate} onChange={e => setReturnRate(e.target.value)} /></div>
+          <div className="space-y-2"><Label>Inflation Rate (%)</Label><Input type="number" step="0.1" value={inflationRate} onChange={e => setInflationRate(e.target.value)} /></div>
+        </div>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-4 border-t">
+          <div>
+            <p className="text-sm text-muted-foreground">Future Monthly Expense</p>
+            <p className="text-xl font-bold text-[hsl(var(--warning))] font-heading">${futureMonthly.toFixed(0)}</p>
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">Corpus Needed</p>
+            <p className="text-xl font-bold text-primary font-heading">${corpusNeeded.toLocaleString("en-US", { maximumFractionDigits: 0 })}</p>
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">Gap</p>
+            <p className={`text-xl font-bold font-heading ${gap > 0 ? "text-destructive" : "text-[hsl(var(--success))]"}`}>
+              ${Math.abs(gap).toLocaleString("en-US", { maximumFractionDigits: 0 })}
+            </p>
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">Monthly SIP Needed</p>
+            <p className="text-xl font-bold text-primary font-heading">${monthlySIP.toFixed(0)}</p>
+          </div>
         </div>
       </CardContent>
     </Card>

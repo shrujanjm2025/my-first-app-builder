@@ -1,11 +1,12 @@
-import { ReactNode, useState } from "react";
+import { ReactNode, useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard, Wallet, PiggyBank, Target, CreditCard, Shield,
-  Calculator, Settings, LogOut, Menu, X, ChevronLeft
+  Calculator, Settings, LogOut, Menu, ChevronLeft, Building2, Landmark,
+  Moon, Sun, BarChart3
 } from "lucide-react";
 
 const navItems = [
@@ -15,6 +16,9 @@ const navItems = [
   { to: "/goals", label: "Goals", icon: Target },
   { to: "/loans", label: "Loans", icon: CreditCard },
   { to: "/insurance", label: "Insurance", icon: Shield },
+  { to: "/credit-score", label: "Credit Score", icon: BarChart3 },
+  { to: "/bank-accounts", label: "Bank Accounts", icon: Building2 },
+  { to: "/deposits", label: "FD & RD", icon: Landmark },
   { to: "/calculators", label: "Calculators", icon: Calculator },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
@@ -24,15 +28,29 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [dark, setDark] = useState(() => {
+    if (typeof window !== "undefined") {
+      return document.documentElement.classList.contains("dark") || localStorage.getItem("theme") === "dark";
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    if (dark) {
+      document.documentElement.classList.add("dark");
+      localStorage.setItem("theme", "dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+      localStorage.setItem("theme", "light");
+    }
+  }, [dark]);
 
   return (
     <div className="flex min-h-screen bg-background">
-      {/* Mobile overlay */}
       {mobileOpen && (
-        <div className="fixed inset-0 bg-black/40 z-40 lg:hidden" onClick={() => setMobileOpen(false)} />
+        <div className="fixed inset-0 bg-foreground/20 z-40 lg:hidden" onClick={() => setMobileOpen(false)} />
       )}
 
-      {/* Sidebar */}
       <aside className={cn(
         "fixed lg:sticky top-0 left-0 z-50 h-screen flex flex-col bg-card border-r transition-all duration-300",
         collapsed ? "w-[72px]" : "w-64",
@@ -40,9 +58,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       )}>
         <div className={cn("flex items-center gap-3 p-4 border-b", collapsed && "justify-center")}>
           <div className="p-1.5 rounded-lg gradient-primary flex-shrink-0">
-            <Wallet className="h-5 w-5 text-white" />
+            <Wallet className="h-5 w-5 text-primary-foreground" />
           </div>
-          {!collapsed && <span className="font-bold text-lg" style={{ fontFamily: 'Space Grotesk' }}>FinanceFlow</span>}
+          {!collapsed && <span className="font-bold text-lg font-heading">FinanceFlow</span>}
         </div>
 
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
@@ -63,6 +81,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         </nav>
 
         <div className="p-3 border-t space-y-2">
+          <button onClick={() => setDark(!dark)}
+            className={cn("flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-secondary w-full", collapsed && "justify-center")}>
+            {dark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+            {!collapsed && (dark ? "Light Mode" : "Dark Mode")}
+          </button>
           <button onClick={() => setCollapsed(!collapsed)}
             className="hidden lg:flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-secondary w-full">
             <ChevronLeft className={cn("h-5 w-5 transition-transform", collapsed && "rotate-180")} />
@@ -76,7 +99,6 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      {/* Main */}
       <main className="flex-1 flex flex-col min-w-0">
         <header className="sticky top-0 z-30 bg-card/80 backdrop-blur-md border-b px-4 lg:px-6 h-14 flex items-center gap-4">
           <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMobileOpen(true)}>

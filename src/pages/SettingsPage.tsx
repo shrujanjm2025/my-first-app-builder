@@ -12,19 +12,31 @@ export default function SettingsPage() {
   const { user } = useAuth();
   const [fullName, setFullName] = useState("");
   const [currency, setCurrency] = useState("USD");
+  const [monthlySalary, setMonthlySalary] = useState("");
+  const [dependents, setDependents] = useState("0");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!user) return;
-    supabase.from("profiles").select("full_name, currency").eq("id", user.id).single().then(({ data }) => {
-      if (data) { setFullName(data.full_name || ""); setCurrency(data.currency || "USD"); }
+    supabase.from("profiles").select("full_name, currency, monthly_salary, dependents").eq("id", user.id).single().then(({ data }) => {
+      if (data) {
+        setFullName(data.full_name || "");
+        setCurrency(data.currency || "USD");
+        setMonthlySalary(String(data.monthly_salary || ""));
+        setDependents(String(data.dependents || 0));
+      }
     });
   }, [user]);
 
   const handleSave = async () => {
     if (!user) return;
     setLoading(true);
-    const { error } = await supabase.from("profiles").update({ full_name: fullName, currency }).eq("id", user.id);
+    const { error } = await supabase.from("profiles").update({
+      full_name: fullName,
+      currency,
+      monthly_salary: parseFloat(monthlySalary) || 0,
+      dependents: parseInt(dependents) || 0,
+    }).eq("id", user.id);
     setLoading(false);
     if (error) toast.error(error.message); else toast.success("Profile updated");
   };
@@ -42,7 +54,16 @@ export default function SettingsPage() {
             <div className="space-y-2"><Label>Email</Label><Input value={user?.email || ""} disabled /></div>
             <div className="space-y-2"><Label>Full Name</Label><Input value={fullName} onChange={(e) => setFullName(e.target.value)} /></div>
             <div className="space-y-2"><Label>Currency</Label><Input value={currency} onChange={(e) => setCurrency(e.target.value)} placeholder="USD" /></div>
-            <Button onClick={handleSave} className="gradient-primary text-white" disabled={loading}>{loading ? "Saving..." : "Save Changes"}</Button>
+            <div className="space-y-2">
+              <Label>Monthly Salary (After Tax)</Label>
+              <Input type="number" value={monthlySalary} onChange={(e) => setMonthlySalary(e.target.value)} placeholder="e.g. 50000" />
+              <p className="text-xs text-muted-foreground">Used for 50/30/20 budgeting and emergency fund calculation</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Number of Dependents</Label>
+              <Input type="number" value={dependents} onChange={(e) => setDependents(e.target.value)} min="0" />
+            </div>
+            <Button onClick={handleSave} className="gradient-primary text-primary-foreground" disabled={loading}>{loading ? "Saving..." : "Save Changes"}</Button>
           </CardContent>
         </Card>
       </div>

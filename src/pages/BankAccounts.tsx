@@ -2,27 +2,22 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
-import { Plus, Building2, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-interface BankAccount {
-  id: string;
-  bank_name: string;
-  account_type: string;
-  account_number: string | null;
-  balance: number;
-}
+const fmtK = (n: number) => n >= 100000 ? `₹${(n / 100000).toFixed(1)}L` : n >= 1000 ? `₹${(n / 1000).toFixed(0)}K` : `₹${n}`;
+
+interface BankAccount { id: string; bank_name: string; account_type: string; account_number: string | null; balance: number; }
 
 export default function BankAccounts() {
   const { user } = useAuth();
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
+  const [transactions, setTransactions] = useState<Record<string, any[]>>({});
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ bank_name: "", account_type: "savings", account_number: "", balance: "" });
 
@@ -30,6 +25,10 @@ export default function BankAccounts() {
     if (!user) return;
     const { data } = await supabase.from("bank_accounts").select("*").eq("user_id", user.id).order("created_at");
     setAccounts((data as BankAccount[]) || []);
+    // Fetch recent transactions
+    const { data: txData } = await supabase.from("transactions").select("*").eq("user_id", user.id).order("date", { ascending: false }).limit(20);
+    // Group by nothing for now - just show recent
+    setTransactions({ recent: txData || [] });
   };
 
   useEffect(() => { fetchAccounts(); }, [user]);
@@ -45,25 +44,28 @@ export default function BankAccounts() {
     else { toast.success("Account added"); setOpen(false); setForm({ bank_name: "", account_type: "savings", account_number: "", balance: "" }); fetchAccounts(); }
   };
 
-  const handleDelete = async (id: string) => {
-    await supabase.from("bank_accounts").delete().eq("id", id);
-    toast.success("Deleted");
-    fetchAccounts();
-  };
+  const handleDelete = async (id: string) => { await supabase.from("bank_accounts").delete().eq("id", id); fetchAccounts(); };
 
   const total = accounts.reduce((s, a) => s + Number(a.balance), 0);
 
+  const bankColors: Record<string, string> = {
+    "HDFC Bank": "#e31837", "SBI": "#2563eb", "ICICI Bank": "#f97316",
+    "Axis Bank": "#8b5cf6", "Kotak": "#e11d48", "Yes Bank": "#0ea5e9",
+  };
+
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
+      <div className="animate-fadeUp space-y-4">
+        <div className="flex justify-between items-start mb-5">
           <div>
-            <h1 className="text-3xl font-bold">Bank Accounts</h1>
-            <p className="text-muted-foreground">Manage all your bank accounts</p>
+            <h2 className="font-heading text-xl font-extrabold mb-1">Bank Accounts</h2>
+            <p className="text-[13px] text-muted-foreground">Consolidated view of all linked accounts</p>
           </div>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button className="gradient-primary text-primary-foreground"><Plus className="h-4 w-4 mr-2" />Add Account</Button>
+              <button className="gradient-primary text-primary-foreground font-heading font-bold py-2 px-4 rounded-xl text-sm flex items-center gap-1.5 transition-all">
+                <Plus className="h-4 w-4" /> Add Account
+              </button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader><DialogTitle>Add Bank Account</DialogTitle></DialogHeader>
@@ -81,43 +83,53 @@ export default function BankAccounts() {
                   </div>
                   <div className="space-y-2"><Label>Account Number</Label><Input value={form.account_number} onChange={e => setForm({ ...form, account_number: e.target.value })} /></div>
                 </div>
-                <div className="space-y-2"><Label>Balance</Label><Input type="number" step="0.01" value={form.balance} onChange={e => setForm({ ...form, balance: e.target.value })} required /></div>
+                <div className="space-y-2"><Label>Balance (₹)</Label><Input type="number" value={form.balance} onChange={e => setForm({ ...form, balance: e.target.value })} required /></div>
                 <Button type="submit" className="w-full gradient-primary text-primary-foreground">Add Account</Button>
               </form>
             </DialogContent>
           </Dialog>
         </div>
 
-        <Card className="shadow-soft border-0">
-          <CardContent className="p-5">
-            <p className="text-sm text-muted-foreground mb-1">Total Balance</p>
-            <p className="text-2xl font-bold font-heading text-[hsl(var(--success))]">${total.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
-          </CardContent>
-        </Card>
-
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {accounts.map(a => (
-            <Card key={a.id} className="shadow-soft border-0">
-              <CardContent className="p-5 space-y-3">
-                <div className="flex justify-between items-start">
-                  <div className="flex items-center gap-2">
-                    <div className="p-2 rounded-lg bg-primary/10"><Building2 className="h-4 w-4 text-primary" /></div>
-                    <div>
-                      <p className="font-semibold">{a.bank_name}</p>
-                      <Badge variant="outline" className="capitalize">{a.account_type}</Badge>
-                    </div>
-                  </div>
-                  <Button variant="ghost" size="icon" onClick={() => handleDelete(a.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                </div>
-                {a.account_number && <p className="text-xs text-muted-foreground">••••{a.account_number.slice(-4)}</p>}
-                <p className="text-xl font-bold font-heading">${Number(a.balance).toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
-              </CardContent>
-            </Card>
-          ))}
-          {accounts.length === 0 && (
-            <Card className="shadow-soft border-0 col-span-full"><CardContent className="p-8 text-center text-muted-foreground">No bank accounts added yet.</CardContent></Card>
-          )}
+        {/* Total Balance */}
+        <div className="bg-card border border-border rounded-2xl p-5 bg-gradient-to-br from-primary/5 to-accent/3">
+          <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider mb-1.5">Total Liquid Balance</div>
+          <div className="font-mono text-[40px] font-bold text-primary">{fmtK(total)}</div>
+          <div className="text-xs text-muted-foreground mt-1">Across {accounts.length} accounts · Updated just now</div>
         </div>
+
+        {/* Account Cards */}
+        {accounts.map((acc, i) => {
+          const color = bankColors[acc.bank_name] || "#6366f1";
+          const initials = acc.bank_name.split(" ").map(w => w[0]).join("").slice(0, 3);
+          return (
+            <div key={i} className="bg-card border border-border rounded-2xl p-5 hover:-translate-y-0.5 hover:shadow-elevated transition-all">
+              <div className="flex justify-between items-start mb-3.5">
+                <div className="flex items-center gap-3">
+                  <div className="w-[42px] h-[42px] rounded-xl flex items-center justify-center text-[10px] font-extrabold font-heading border"
+                    style={{ background: `${color}22`, color, borderColor: `${color}33` }}>
+                    {initials}
+                  </div>
+                  <div>
+                    <div className="font-heading font-bold text-[15px]">{acc.bank_name}</div>
+                    <div className="text-xs text-muted-foreground capitalize">{acc.account_type} · {acc.account_number ? `••••${acc.account_number.slice(-4)}` : "No number"}</div>
+                  </div>
+                </div>
+                <div className="text-right flex items-start gap-2">
+                  <div>
+                    <div className="font-mono text-[22px] font-semibold">{fmtK(Number(acc.balance))}</div>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-primary/10 text-primary mt-1">Active</span>
+                  </div>
+                  <button onClick={() => handleDelete(acc.id)} className="p-1.5 rounded-lg hover:bg-destructive/10 text-destructive">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+        {accounts.length === 0 && (
+          <div className="bg-card border border-border rounded-2xl p-8 text-center text-muted-foreground">No bank accounts added yet.</div>
+        )}
       </div>
     </DashboardLayout>
   );

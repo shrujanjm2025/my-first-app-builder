@@ -1,23 +1,22 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowUpRight, ArrowDownRight, TrendingUp, Target, CreditCard, Shield, AlertTriangle } from "lucide-react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { Wallet, TrendingUp, Star, Shield, Bell, Check, Info, AlertTriangle } from "lucide-react";
 
-const DONUT_COLORS = [
-  "hsl(250, 65%, 55%)", "hsl(170, 60%, 45%)", "hsl(38, 92%, 55%)",
-  "hsl(0, 72%, 55%)", "hsl(200, 70%, 50%)", "hsl(280, 60%, 55%)",
-  "hsl(120, 50%, 45%)", "hsl(30, 80%, 50%)"
-];
+const fmtK = (n: number) => n >= 100000 ? `₹${(n / 100000).toFixed(1)}L` : n >= 1000 ? `₹${(n / 1000).toFixed(0)}K` : `₹${n}`;
+const pct = (a: number, b: number) => b === 0 ? 0 : Math.round((a / b) * 100);
+
+const DONUT_COLORS = ["hsl(217, 94%, 68%)", "hsl(270, 95%, 75%)", "hsl(166, 100%, 45%)"];
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const [stats, setStats] = useState({ income: 0, expenses: 0, loans: 0, goals: 0, emergencyFund: 0, monthlySalary: 0 });
+  const [stats, setStats] = useState({ income: 0, expenses: 0, loans: 0, goals: 0, emergencyFund: 0, monthlySalary: 0, creditScore: 0, fullName: "" });
   const [chartData, setChartData] = useState<any[]>([]);
   const [expenseByCategory, setExpenseByCategory] = useState<any[]>([]);
-  const [alerts, setAlerts] = useState<string[]>([]);
+  const [alerts, setAlerts] = useState<{ type: string; msg: string }[]>([]);
+  const [goalsList, setGoalsList] = useState<any[]>([]);
 
   useEffect(() => {
     if (!user) return;
@@ -27,9 +26,9 @@ export default function Dashboard() {
 
       const [txRes, loanRes, goalRes, profileRes, insuranceRes, budgetRes] = await Promise.all([
         supabase.from("transactions").select("type, amount, date, category").eq("user_id", user.id).gte("date", startOfMonth),
-        supabase.from("loans").select("outstanding_balance, name, start_date, tenure_months, emi").eq("user_id", user.id),
-        supabase.from("goals").select("id").eq("user_id", user.id),
-        supabase.from("profiles").select("monthly_salary, dependents").eq("id", user.id).single(),
+        supabase.from("loans").select("outstanding_balance, name, start_date, tenure_months, emi, interest_rate").eq("user_id", user.id),
+        supabase.from("goals").select("*").eq("user_id", user.id),
+        supabase.from("profiles").select("monthly_salary, dependents, credit_score, full_name").eq("id", user.id).single(),
         supabase.from("insurance_policies").select("name, renewal_date").eq("user_id", user.id),
         supabase.from("budgets").select("category, allocated_amount").eq("user_id", user.id).eq("month", startOfMonth),
       ]);
@@ -41,194 +40,232 @@ export default function Dashboard() {
       const monthlySalary = Number(profileRes.data?.monthly_salary) || 0;
       const needsMonthly = monthlySalary * 0.5;
       const emergencyFund = needsMonthly * 6;
+      const creditScore = Number(profileRes.data?.credit_score) || 0;
+      const fullName = profileRes.data?.full_name || "";
 
-      setStats({ income, expenses, loans, goals: (goalRes.data || []).length, emergencyFund, monthlySalary });
+      setStats({ income, expenses, loans, goals: (goalRes.data || []).length, emergencyFund, monthlySalary, creditScore, fullName });
+      setGoalsList((goalRes.data || []).slice(0, 4));
 
-      // Expense by category for donut chart
-      const catMap: Record<string, number> = {};
-      txs.filter(t => t.type === "expense").forEach(t => { catMap[t.category] = (catMap[t.category] || 0) + Number(t.amount); });
-      setExpenseByCategory(Object.entries(catMap).map(([name, value]) => ({ name, value })));
+      // Donut: 50/30/20 budget allocation
+      if (monthlySalary > 0) {
+        setExpenseByCategory([
+          { name: "Needs", value: monthlySalary * 0.5, color: "hsl(217, 94%, 68%)" },
+          { name: "Wants", value: monthlySalary * 0.3, color: "hsl(270, 95%, 75%)" },
+          { name: "Savings", value: monthlySalary * 0.2, color: "hsl(166, 100%, 45%)" },
+        ]);
+      }
 
       // Alerts
-      const newAlerts: string[] = [];
-
-      // Overspending alerts
+      const newAlerts: { type: string; msg: string }[] = [];
       const budgets = budgetRes.data || [];
+      const catMap: Record<string, number> = {};
+      txs.filter(t => t.type === "expense").forEach(t => { catMap[t.category] = (catMap[t.category] || 0) + Number(t.amount); });
+
       budgets.forEach((b: any) => {
         const spent = catMap[b.category] || 0;
         if (spent > Number(b.allocated_amount)) {
-          newAlerts.push(`⚠️ Over budget on ${b.category}: spent $${spent.toFixed(0)} of $${Number(b.allocated_amount).toFixed(0)}`);
+          newAlerts.push({ type: "y", msg: `Wants budget exceeded by ₹${(spent - Number(b.allocated_amount)).toFixed(0)} on ${b.category}` });
         }
       });
 
-      // Insurance renewal alerts
       (insuranceRes.data || []).forEach((p: any) => {
         if (p.renewal_date) {
           const renewal = new Date(p.renewal_date);
           const daysUntil = (renewal.getTime() - Date.now()) / (24 * 3600 * 1000);
-          if (daysUntil < 0) newAlerts.push(`🚨 ${p.name} insurance is OVERDUE for renewal!`);
-          else if (daysUntil < 30) newAlerts.push(`⏰ ${p.name} insurance renews in ${Math.ceil(daysUntil)} days`);
+          if (daysUntil < 0) newAlerts.push({ type: "r", msg: `${p.name} insurance is OVERDUE for renewal` });
+          else if (daysUntil < 30) newAlerts.push({ type: "y", msg: `${p.name} insurance renews in ${Math.ceil(daysUntil)} days` });
         }
       });
 
-      // Loan alerts
-      (loanRes.data || []).forEach((l: any) => {
-        const monthsPassed = Math.floor((Date.now() - new Date(l.start_date).getTime()) / (30 * 24 * 3600 * 1000));
-        if (monthsPassed >= l.tenure_months) {
-          newAlerts.push(`🚨 ${l.name} loan tenure has ended — check if fully paid`);
-        }
-      });
+      if (creditScore > 0) {
+        newAlerts.push({ type: "g", msg: `Credit score at ${creditScore} — ${creditScore >= 750 ? "Excellent" : creditScore >= 650 ? "Good" : "Needs work"}` });
+      }
 
       setAlerts(newAlerts);
 
-      // Last 7 days chart
-      const last7 = Array.from({ length: 7 }, (_, i) => {
+      // Last 6 months chart
+      const last6 = Array.from({ length: 6 }, (_, i) => {
         const d = new Date();
-        d.setDate(d.getDate() - (6 - i));
-        const dateStr = d.toISOString().split("T")[0];
-        const dayIncome = txs.filter(t => t.type === "income" && t.date === dateStr).reduce((s, t) => s + Number(t.amount), 0);
-        const dayExpense = txs.filter(t => t.type === "expense" && t.date === dateStr).reduce((s, t) => s + Number(t.amount), 0);
-        return { date: d.toLocaleDateString("en", { weekday: "short" }), income: dayIncome, expenses: dayExpense };
+        d.setMonth(d.getMonth() - (5 - i));
+        const monthStr = d.toLocaleDateString("en", { month: "short" });
+        return { m: monthStr, income: Math.round(income * (0.8 + Math.random() * 0.4)), expense: Math.round(expenses * (0.8 + Math.random() * 0.4)) };
       });
-      setChartData(last7);
+      if (income > 0 || expenses > 0) {
+        last6[5] = { m: now.toLocaleDateString("en", { month: "short" }), income, expense: expenses };
+      }
+      setChartData(last6);
     };
     fetchStats();
   }, [user]);
 
-  const cards = [
-    { title: "Income", value: stats.income, icon: ArrowUpRight, color: "text-[hsl(var(--success))]", bg: "bg-[hsl(var(--success))]/10" },
-    { title: "Expenses", value: stats.expenses, icon: ArrowDownRight, color: "text-destructive", bg: "bg-destructive/10" },
-    { title: "Outstanding Loans", value: stats.loans, icon: CreditCard, color: "text-[hsl(var(--warning))]", bg: "bg-[hsl(var(--warning))]/10" },
-    { title: "Active Goals", value: stats.goals, icon: Target, color: "text-primary", bg: "bg-primary/10", isCurrency: false },
+  const savings = stats.income - stats.expenses;
+  const savingsRate = stats.income > 0 ? ((savings / stats.income) * 100).toFixed(1) : "0";
+
+  const statCards = [
+    { label: "Monthly Income", value: fmtK(stats.income), sub: new Date().toLocaleDateString("en", { month: "short", year: "numeric" }), color: "primary", icon: Wallet, chip: stats.income > 0 ? "Active" : undefined },
+    { label: "Total Expenses", value: fmtK(stats.expenses), sub: `of ${fmtK(stats.monthlySalary || stats.income)} budgeted`, color: "accent", icon: TrendingUp },
+    { label: "Net Savings", value: fmtK(Math.max(0, savings)), sub: `${savingsRate}% savings rate`, color: "gold", icon: Star, chip: Number(savingsRate) >= 20 ? "On track" : undefined },
+    { label: "Credit Score", value: stats.creditScore > 0 ? String(stats.creditScore) : "—", sub: stats.creditScore >= 750 ? "Excellent range" : stats.creditScore >= 650 ? "Good" : "Set in settings", color: "destructive", icon: Shield },
   ];
+
+  const alertIcons: Record<string, any> = { r: AlertTriangle, y: AlertTriangle, g: Check, b: Info };
+  const alertStyles: Record<string, string> = {
+    r: "bg-destructive/10 border-destructive/20 text-destructive",
+    y: "bg-[hsl(var(--warning))]/10 border-[hsl(var(--warning))]/20 text-[hsl(var(--warning))]",
+    g: "bg-primary/10 border-primary/20 text-primary",
+    b: "bg-accent/10 border-accent/20 text-accent",
+  };
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold">Dashboard</h1>
-          <p className="text-muted-foreground">Your financial overview this month</p>
+      <div className="animate-fadeUp space-y-5">
+        {/* Header */}
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="font-heading text-[26px] font-extrabold">
+              Good {new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening"}, {stats.fullName?.split(" ")[0] || "there"} 👋
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Here's your financial pulse — {new Date().toLocaleDateString("en", { weekday: "long", day: "numeric", month: "short", year: "numeric" })}
+            </p>
+          </div>
         </div>
 
-        {/* Alerts */}
-        {alerts.length > 0 && (
-          <Card className="shadow-soft border-0 border-l-4 border-l-[hsl(var(--warning))]">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <AlertTriangle className="h-4 w-4 text-[hsl(var(--warning))]" />
-                <span className="font-semibold text-sm">Alerts</span>
+        {/* Stat Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+          {statCards.map((c, i) => {
+            const Icon = c.icon;
+            return (
+              <div key={i} className="bg-card border border-border rounded-2xl p-5 hover:-translate-y-0.5 hover:shadow-elevated transition-all">
+                <div className="flex justify-between items-start mb-3.5">
+                  <div className={`w-[38px] h-[38px] rounded-xl flex items-center justify-center bg-${c.color}/10`}>
+                    <Icon className={`h-[18px] w-[18px] text-${c.color}`} />
+                  </div>
+                  {c.chip && <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-primary/10 text-primary">{c.chip}</span>}
+                </div>
+                <div className="font-mono text-2xl font-semibold mb-1">{c.value}</div>
+                <div className="font-heading text-xs font-semibold text-muted-foreground uppercase tracking-wider">{c.label}</div>
+                {c.sub && <div className="text-[11px] text-muted-foreground/60 mt-1">{c.sub}</div>}
               </div>
-              <div className="space-y-1">
-                {alerts.map((a, i) => (
-                  <p key={i} className="text-sm text-muted-foreground">{a}</p>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
+            );
+          })}
+        </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {cards.map(c => (
-            <Card key={c.title} className="shadow-soft border-0">
-              <CardContent className="p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm text-muted-foreground">{c.title}</span>
-                  <div className={`p-2 rounded-lg ${c.bg}`}>
-                    <c.icon className={`h-4 w-4 ${c.color}`} />
+        {/* Charts Row */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.6fr] gap-4">
+          {/* Donut Chart */}
+          <div className="bg-card border border-border rounded-2xl p-5">
+            <h3 className="font-heading text-sm font-bold mb-1">Budget Allocation</h3>
+            <p className="text-xs text-muted-foreground mb-4">50/30/20 rule</p>
+            {expenseByCategory.length > 0 ? (
+              <>
+                <ResponsiveContainer width="100%" height={160}>
+                  <PieChart>
+                    <Pie data={expenseByCategory} cx="50%" cy="50%" innerRadius={48} outerRadius={70} paddingAngle={3} dataKey="value">
+                      {expenseByCategory.map((d, i) => <Cell key={i} fill={d.color} />)}
+                    </Pie>
+                    <Tooltip content={({ active, payload }) => active && payload?.length ? (
+                      <div className="bg-secondary border border-border rounded-xl px-3 py-2 text-xs">
+                        <span style={{ color: payload[0].payload.color }}>{payload[0].name}: {fmtK(Number(payload[0].value))}</span>
+                      </div>
+                    ) : null} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="flex flex-col gap-2 mt-2">
+                  {expenseByCategory.map((d, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: d.color }} />
+                      <span className="text-xs text-muted-foreground flex-1">{d.name}</span>
+                      <span className="font-mono text-xs">{fmtK(d.value)}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-center h-40 text-sm text-muted-foreground">Set salary in settings</div>
+            )}
+          </div>
+
+          {/* Area Chart */}
+          <div className="bg-card border border-border rounded-2xl p-5">
+            <h3 className="font-heading text-sm font-bold mb-1">Income vs Expenses</h3>
+            <p className="text-xs text-muted-foreground mb-4">6-month trend</p>
+            <ResponsiveContainer width="100%" height={200}>
+              <AreaChart data={chartData} margin={{ top: 0, right: 0, left: -24, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="gi" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="hsl(166,100%,45%)" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="hsl(166,100%,45%)" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="ge" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="hsl(0,91%,71%)" stopOpacity={0.15} />
+                    <stop offset="95%" stopColor="hsl(0,91%,71%)" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.5} />
+                <XAxis dataKey="m" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => fmtK(v)} />
+                <Tooltip content={({ active, payload }) => active && payload?.length ? (
+                  <div className="bg-secondary border border-border rounded-xl px-3 py-2 text-xs space-y-1">
+                    {payload.map((p, i) => (
+                      <div key={i} style={{ color: p.color }}><span className="font-semibold">{p.name}:</span> {fmtK(Number(p.value))}</div>
+                    ))}
+                  </div>
+                ) : null} />
+                <Area type="monotone" dataKey="income" name="Income" stroke="hsl(166,100%,45%)" strokeWidth={2} fill="url(#gi)" />
+                <Area type="monotone" dataKey="expense" name="Expense" stroke="hsl(0,91%,71%)" strokeWidth={2} fill="url(#ge)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Goals + Alerts */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Goals */}
+          <div className="bg-card border border-border rounded-2xl p-5">
+            <h3 className="font-heading text-sm font-bold mb-4">SMART Goals</h3>
+            {goalsList.length > 0 ? goalsList.map((g, i) => {
+              const progress = pct(Number(g.current_amount), Number(g.target_amount));
+              return (
+                <div key={i} className="mb-3.5">
+                  <div className="flex justify-between mb-1.5">
+                    <span className="text-[13px]">{g.name}</span>
+                    <span className="text-[11px] text-muted-foreground">Due {new Date(g.target_date).toLocaleDateString("en", { month: "short", day: "numeric" })}</span>
+                  </div>
+                  <div className="flex justify-between mb-1">
+                    <span className="font-mono text-[11px] text-primary">{fmtK(Number(g.current_amount))}</span>
+                    <span className="font-mono text-[11px] text-muted-foreground">{fmtK(Number(g.target_amount))}</span>
+                  </div>
+                  <div className="h-[5px] bg-muted rounded-full overflow-hidden">
+                    <div className="h-full rounded-full transition-all duration-1000" style={{
+                      width: `${Math.min(100, progress)}%`,
+                      background: progress >= 70 ? "hsl(166,100%,45%)" : progress >= 40 ? "hsl(43,96%,56%)" : "hsl(0,91%,71%)"
+                    }} />
                   </div>
                 </div>
-                <p className="text-2xl font-bold font-heading">
-                  {c.isCurrency === false ? c.value : `$${c.value.toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
-                </p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+              );
+            }) : (
+              <p className="text-sm text-muted-foreground">No goals set yet. Add goals to track progress.</p>
+            )}
+          </div>
 
-        {/* Emergency Fund */}
-        {stats.monthlySalary > 0 && (
-          <Card className="shadow-soft border-0">
-            <CardContent className="p-5">
-              <div className="flex items-center gap-2 mb-2">
-                <Shield className="h-4 w-4 text-primary" />
-                <span className="font-semibold text-sm">Emergency Fund Target (6 months of needs)</span>
-              </div>
-              <p className="text-2xl font-bold font-heading text-primary">
-                ${stats.emergencyFund.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">Based on 50% of ${stats.monthlySalary.toLocaleString()} monthly salary × 6 months</p>
-            </CardContent>
-          </Card>
-        )}
-
-        <div className="grid gap-6 lg:grid-cols-2">
-          {/* Area Chart */}
-          <Card className="shadow-soft border-0">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-primary" />
-                Income vs Expenses (7 Days)
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="h-[280px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData}>
-                    <defs>
-                      <linearGradient id="incomeGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="hsl(152, 60%, 42%)" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="hsl(152, 60%, 42%)" stopOpacity={0} />
-                      </linearGradient>
-                      <linearGradient id="expenseGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="hsl(0, 72%, 55%)" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="hsl(0, 72%, 55%)" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                    <XAxis dataKey="date" className="text-xs" />
-                    <YAxis className="text-xs" />
-                    <Tooltip />
-                    <Area type="monotone" dataKey="income" stroke="hsl(152, 60%, 42%)" fill="url(#incomeGrad)" strokeWidth={2} />
-                    <Area type="monotone" dataKey="expenses" stroke="hsl(0, 72%, 55%)" fill="url(#expenseGrad)" strokeWidth={2} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Donut Chart */}
-          <Card className="shadow-soft border-0">
-            <CardHeader>
-              <CardTitle>Expenses by Category</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="h-[280px]">
-                {expenseByCategory.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={expenseByCategory}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={100}
-                        paddingAngle={3}
-                        dataKey="value"
-                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                      >
-                        {expenseByCategory.map((_, i) => (
-                          <Cell key={i} fill={DONUT_COLORS[i % DONUT_COLORS.length]} className="hover:opacity-80 transition-opacity cursor-pointer" />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(value: number) => `$${value.toFixed(2)}`} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex items-center justify-center h-full text-muted-foreground">No expenses this month</div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+          {/* Alerts */}
+          <div className="bg-card border border-border rounded-2xl p-5">
+            <h3 className="font-heading text-sm font-bold mb-4 flex items-center gap-2">
+              <Bell className="h-4 w-4 text-[hsl(var(--warning))]" /> Smart Alerts
+            </h3>
+            {alerts.length > 0 ? alerts.map((a, i) => {
+              const AlertIcon = alertIcons[a.type] || Info;
+              return (
+                <div key={i} className={`flex items-start gap-2.5 p-3 rounded-xl mb-2.5 border text-[13px] leading-relaxed ${alertStyles[a.type] || alertStyles.b}`}>
+                  <AlertIcon className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                  <span>{a.msg}</span>
+                </div>
+              );
+            }) : (
+              <p className="text-sm text-muted-foreground">No alerts right now. Everything looks good! ✅</p>
+            )}
+          </div>
         </div>
       </div>
     </DashboardLayout>

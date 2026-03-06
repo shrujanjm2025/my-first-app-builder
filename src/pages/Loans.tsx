@@ -2,25 +2,26 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, CreditCard, Trash2, Info, TrendingDown, Zap } from "lucide-react";
+import { Plus, Trash2, Info, Check } from "lucide-react";
 import { toast } from "sonner";
 
-interface Loan { id: string; name: string; type: string; principal: number; interest_rate: number; tenure_months: number; emi: number; outstanding_balance: number; start_date: string; }
+const fmtK = (n: number) => n >= 100000 ? `₹${(n / 100000).toFixed(1)}L` : n >= 1000 ? `₹${(n / 1000).toFixed(0)}K` : `₹${n}`;
+const pct = (a: number, b: number) => b === 0 ? 0 : Math.round((a / b) * 100);
 
+interface Loan { id: string; name: string; type: string; principal: number; interest_rate: number; tenure_months: number; emi: number; outstanding_balance: number; start_date: string; }
 const LOAN_TYPES = ["home", "personal", "car", "education", "credit_card", "other"];
+const LOAN_ICONS: Record<string, string> = { home: "🏠", car: "🚗", credit_card: "💳", personal: "💰", education: "🎓", other: "📋" };
 
 export default function Loans() {
   const { user } = useAuth();
   const [loans, setLoans] = useState<Loan[]>([]);
   const [open, setOpen] = useState(false);
+  const [method, setMethod] = useState("avalanche");
   const [form, setForm] = useState({ name: "", type: "personal", principal: "", interest_rate: "", tenure_months: "", start_date: new Date().toISOString().split("T")[0] });
 
   const fetchLoans = async () => {
@@ -52,51 +53,47 @@ export default function Loans() {
     if (error) toast.error(error.message); else { toast.success("Loan added"); setOpen(false); fetchLoans(); }
   };
 
-  const handleDelete = async (id: string) => {
-    await supabase.from("loans").delete().eq("id", id);
-    fetchLoans();
-  };
+  const handleDelete = async (id: string) => { await supabase.from("loans").delete().eq("id", id); fetchLoans(); };
 
   const totalOutstanding = loans.reduce((s, l) => s + Number(l.outstanding_balance), 0);
   const totalEMI = loans.reduce((s, l) => s + Number(l.emi), 0);
-
-  // Debt Avalanche: highest interest first
   const avalancheOrder = [...loans].sort((a, b) => Number(b.interest_rate) - Number(a.interest_rate));
-  // Debt Snowball: lowest balance first
   const snowballOrder = [...loans].sort((a, b) => Number(a.outstanding_balance) - Number(b.outstanding_balance));
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
+      <div className="animate-fadeUp space-y-4">
+        <div className="flex justify-between items-start mb-5">
           <div>
-            <h1 className="text-3xl font-bold">Loans</h1>
-            <p className="text-muted-foreground">Manage and optimize your debt</p>
+            <h2 className="font-heading text-xl font-extrabold mb-1">Loans & Debt</h2>
+            <p className="text-[13px] text-muted-foreground">Track EMIs, optimize repayment, save on interest</p>
           </div>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button className="gradient-primary text-primary-foreground"><Plus className="h-4 w-4 mr-2" />Add Loan</Button>
+              <button className="gradient-primary text-primary-foreground font-heading font-bold py-2 px-4 rounded-xl text-sm flex items-center gap-1.5 hover:shadow-[0_6px_22px_hsl(var(--primary)/0.32)] transition-all">
+                <Plus className="h-4 w-4" /> Add Loan
+              </button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader><DialogTitle>Add Loan</DialogTitle></DialogHeader>
               <form onSubmit={handleAdd} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2"><Label>Loan Name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></div>
+                  <div className="space-y-2"><Label>Loan Name</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required /></div>
                   <div className="space-y-2">
                     <Label>Type</Label>
-                    <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
+                    <Select value={form.type} onValueChange={v => setForm({ ...form, type: v })}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>{LOAN_TYPES.map(t => <SelectItem key={t} value={t} className="capitalize">{t.replace("_", " ")}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2"><Label>Principal ($)</Label><Input type="number" step="0.01" value={form.principal} onChange={(e) => setForm({ ...form, principal: e.target.value })} required /></div>
-                  <div className="space-y-2"><Label>Interest Rate (%)</Label><Input type="number" step="0.01" value={form.interest_rate} onChange={(e) => setForm({ ...form, interest_rate: e.target.value })} required /></div>
+                  <div className="space-y-2"><Label>Principal (₹)</Label><Input type="number" value={form.principal} onChange={e => setForm({ ...form, principal: e.target.value })} required /></div>
+                  <div className="space-y-2"><Label>Interest Rate (%)</Label><Input type="number" step="0.01" value={form.interest_rate} onChange={e => setForm({ ...form, interest_rate: e.target.value })} required /></div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2"><Label>Tenure (months)</Label><Input type="number" value={form.tenure_months} onChange={(e) => setForm({ ...form, tenure_months: e.target.value })} required /></div>
-                  <div className="space-y-2"><Label>Start Date</Label><Input type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} required /></div>
+                  <div className="space-y-2"><Label>Tenure (months)</Label><Input type="number" value={form.tenure_months} onChange={e => setForm({ ...form, tenure_months: e.target.value })} required /></div>
+                  <div className="space-y-2"><Label>Start Date</Label><Input type="date" value={form.start_date} onChange={e => setForm({ ...form, start_date: e.target.value })} required /></div>
                 </div>
                 <Button type="submit" className="w-full gradient-primary text-primary-foreground">Add Loan</Button>
               </form>
@@ -104,110 +101,120 @@ export default function Loans() {
           </Dialog>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Card className="shadow-soft border-0">
-            <CardContent className="p-5">
-              <p className="text-sm text-muted-foreground mb-1">Total Outstanding</p>
-              <p className="text-2xl font-bold text-destructive font-heading">${totalOutstanding.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
-            </CardContent>
-          </Card>
-          <Card className="shadow-soft border-0">
-            <CardContent className="p-5">
-              <p className="text-sm text-muted-foreground mb-1">Monthly EMI Total</p>
-              <p className="text-2xl font-bold font-heading">${totalEMI.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
-            </CardContent>
-          </Card>
+        {/* Offset account tip */}
+        <div className="flex items-start gap-2.5 p-3 rounded-xl border bg-primary/10 border-primary/20 text-primary text-[13px] leading-relaxed">
+          <Info className="h-4 w-4 flex-shrink-0 mt-0.5" />
+          <div><strong>Offset account tip:</strong> Keeping ₹50,000 in an offset-linked account reduces your Home Loan interest significantly. Paying 1 extra EMI/year saves lakhs in total interest.</div>
         </div>
 
         {/* Loan Cards */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {loans.map(l => (
-            <Card key={l.id} className="shadow-soft border-0">
-              <CardContent className="p-5 space-y-3">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="font-semibold">{l.name}</p>
-                    <Badge variant="outline" className="capitalize mt-1">{l.type.replace("_", " ")}</Badge>
-                  </div>
-                  <Button variant="ghost" size="icon" onClick={() => handleDelete(l.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div><span className="text-muted-foreground">EMI</span><p className="font-semibold">${Number(l.emi).toFixed(2)}/mo</p></div>
-                  <div><span className="text-muted-foreground">Rate</span><p className="font-semibold">{Number(l.interest_rate)}%</p></div>
-                  <div><span className="text-muted-foreground">Outstanding</span><p className="font-semibold text-destructive">${Number(l.outstanding_balance).toFixed(0)}</p></div>
-                  <div><span className="text-muted-foreground">Tenure</span><p className="font-semibold">{l.tenure_months} months</p></div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-          {loans.length === 0 && (
-            <Card className="shadow-soft border-0 col-span-full"><CardContent className="p-8 text-center text-muted-foreground">No loans tracked yet.</CardContent></Card>
-          )}
-        </div>
-
-        {/* Debt Repayment Strategies */}
-        {loans.length > 1 && (
-          <Card className="shadow-soft border-0">
-            <CardHeader>
-              <CardTitle>Debt Repayment Strategies</CardTitle>
-              <CardDescription>Choose a method to pay off debt faster</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Tabs defaultValue="avalanche">
-                <TabsList>
-                  <TabsTrigger value="avalanche" className="gap-1"><Zap className="h-3.5 w-3.5" />Avalanche</TabsTrigger>
-                  <TabsTrigger value="snowball" className="gap-1"><TrendingDown className="h-3.5 w-3.5" />Snowball</TabsTrigger>
-                </TabsList>
-                <TabsContent value="avalanche" className="mt-4">
-                  <p className="text-sm text-muted-foreground mb-3">Pay minimums on all debts, then put extra money toward the <strong>highest interest rate</strong> first. Saves the most money overall.</p>
-                  <div className="space-y-2">
-                    {avalancheOrder.map((l, i) => (
-                      <div key={l.id} className="flex items-center gap-3 p-3 rounded-lg bg-secondary/50">
-                        <span className="text-sm font-bold text-primary w-6">{i + 1}</span>
-                        <div className="flex-1">
-                          <p className="text-sm font-medium">{l.name}</p>
-                          <p className="text-xs text-muted-foreground">{Number(l.interest_rate)}% rate • ${Number(l.outstanding_balance).toLocaleString()} balance</p>
+        {loans.length > 0 && (
+          <div>
+            <h3 className="font-heading text-[15px] font-bold mb-3">Active Loans</h3>
+            <div className="flex flex-col gap-3">
+              {loans.map(l => {
+                const monthsPassed = Math.floor((Date.now() - new Date(l.start_date).getTime()) / (30 * 24 * 3600 * 1000));
+                const progress = l.tenure_months > 0 ? pct(monthsPassed, l.tenure_months) : 0;
+                return (
+                  <div key={l.id} className="bg-card border border-border rounded-2xl p-5 hover:-translate-y-0.5 hover:shadow-elevated transition-all">
+                    <div className="flex justify-between items-start mb-3.5">
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-[22px]">{LOAN_ICONS[l.type] || "📋"}</span>
+                        <div>
+                          <div className="font-heading font-bold text-[15px]">{l.name}</div>
+                          <div className="text-xs text-muted-foreground mt-0.5">{l.tenure_months} months · {Number(l.interest_rate)}% p.a.</div>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </TabsContent>
-                <TabsContent value="snowball" className="mt-4">
-                  <p className="text-sm text-muted-foreground mb-3">Pay minimums on all debts, then put extra money toward the <strong>smallest balance</strong> first. Builds momentum with quick wins.</p>
-                  <div className="space-y-2">
-                    {snowballOrder.map((l, i) => (
-                      <div key={l.id} className="flex items-center gap-3 p-3 rounded-lg bg-secondary/50">
-                        <span className="text-sm font-bold text-primary w-6">{i + 1}</span>
-                        <div className="flex-1">
-                          <p className="text-sm font-medium">{l.name}</p>
-                          <p className="text-xs text-muted-foreground">${Number(l.outstanding_balance).toLocaleString()} balance • {Number(l.interest_rate)}% rate</p>
+                      <div className="text-right flex items-start gap-2">
+                        <div>
+                          <div className="font-mono text-lg font-semibold text-destructive">{fmtK(Number(l.outstanding_balance))}</div>
+                          <div className="text-[11px] text-muted-foreground">outstanding</div>
                         </div>
+                        <button onClick={() => handleDelete(l.id)} className="p-1.5 rounded-lg hover:bg-destructive/10 text-destructive">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
                       </div>
-                    ))}
+                    </div>
+                    {l.tenure_months > 0 && (
+                      <>
+                        <div className="h-[5px] bg-muted rounded-full overflow-hidden mb-1.5">
+                          <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, progress)}%`, background: "linear-gradient(90deg, hsl(166,100%,45%), hsl(217,94%,68%))" }} />
+                        </div>
+                        <div className="flex justify-between text-[11px] text-muted-foreground mb-3">
+                          <span>{monthsPassed} of {l.tenure_months} months paid</span>
+                          <span>{Math.max(0, l.tenure_months - monthsPassed)} months remaining</span>
+                        </div>
+                      </>
+                    )}
+                    <div className="flex gap-2">
+                      <div className="flex-1 bg-secondary rounded-lg p-2 text-center">
+                        <div className="font-mono text-sm font-semibold text-primary">{fmtK(Number(l.emi))}</div>
+                        <div className="text-[10px] text-muted-foreground mt-0.5">Monthly EMI</div>
+                      </div>
+                      {Number(l.interest_rate) >= 30 && (
+                        <div className="flex-[2] bg-destructive/10 border border-destructive/20 rounded-lg p-2 text-[11px] text-destructive">
+                          ⚠️ {Number(l.interest_rate)}% APR is extremely high. Prioritize paying this off first.
+                        </div>
+                      )}
+                      {Number(l.interest_rate) < 10 && (
+                        <div className="flex-[2] bg-primary/10 rounded-lg p-2 text-[11px] text-primary">
+                          💡 +1 extra EMI/year saves ~{fmtK(Math.round(Number(l.emi) * 4))} in total interest
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
+                );
+              })}
+            </div>
+          </div>
         )}
 
-        {/* Suggestions */}
-        <Card className="shadow-soft border-0 bg-primary/5">
-          <CardContent className="p-5 space-y-3">
-            <div className="flex items-start gap-3">
-              <Info className="h-5 w-5 text-primary mt-0.5" />
-              <div>
-                <p className="font-semibold">Tips to Pay Off Loans Faster</p>
-                <ul className="text-sm text-muted-foreground mt-2 space-y-1 list-disc pl-4">
-                  <li><strong>Offset Account:</strong> Link a savings account to your home loan — the balance offsets principal, reducing interest paid.</li>
-                  <li><strong>1 Extra EMI/Year:</strong> Making just one extra EMI payment per year can shave years off your loan tenure.</li>
-                  <li><strong>Round Up EMIs:</strong> Round your EMI up to the nearest hundred to pay off faster without noticing.</li>
-                  <li><strong>Refinance:</strong> If rates drop, refinancing to a lower rate can save thousands.</li>
-                </ul>
-              </div>
+        {loans.length === 0 && (
+          <div className="bg-card border border-border rounded-2xl p-8 text-center text-muted-foreground">
+            No loans tracked yet. Click "Add Loan" to get started.
+          </div>
+        )}
+
+        {/* Debt Strategy */}
+        {loans.length > 1 && (
+          <div className="bg-card border border-border rounded-2xl p-5">
+            <h3 className="font-heading text-sm font-bold mb-3">Debt Repayment Strategy</h3>
+            <div className="flex gap-2 mb-4">
+              <button onClick={() => setMethod("avalanche")}
+                className={`py-1.5 px-3 rounded-lg font-heading text-xs font-bold transition-all ${method === "avalanche" ? "gradient-primary text-primary-foreground" : "border border-border text-muted-foreground hover:bg-secondary"}`}>
+                🏔️ Debt Avalanche
+              </button>
+              <button onClick={() => setMethod("snowball")}
+                className={`py-1.5 px-3 rounded-lg font-heading text-xs font-bold transition-all ${method === "snowball" ? "gradient-primary text-primary-foreground" : "border border-border text-muted-foreground hover:bg-secondary"}`}>
+                ⛄ Debt Snowball
+              </button>
             </div>
-          </CardContent>
-        </Card>
+            <p className="text-[13px] text-muted-foreground mb-3">
+              {method === "avalanche"
+                ? <>Pay <strong className="text-foreground">minimum on all loans</strong>, then throw extra money at the <strong className="text-primary">highest interest rate</strong> first. Saves most money.</>
+                : <>Pay <strong className="text-foreground">minimum on all</strong>, then attack the <strong className="text-primary">smallest balance</strong> first. Great for psychological wins.</>
+              }
+            </p>
+            <div className="flex flex-col gap-2">
+              {(method === "avalanche" ? avalancheOrder : snowballOrder).map((l, i) => (
+                <div key={l.id} className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
+                  i === 0 ? (method === "avalanche" ? "bg-destructive/10 border-destructive/20" : "bg-primary/10 border-primary/20") : "bg-secondary border-transparent"
+                }`}>
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-mono font-bold ${
+                    i === 0 ? (method === "avalanche" ? "bg-destructive text-white" : "bg-primary text-primary-foreground") : "bg-muted-foreground/30 text-background"
+                  }`}>{i + 1}</div>
+                  <span className={`flex-1 text-[13px] ${i === 0 ? "font-semibold" : ""}`}>{l.name}</span>
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                    method === "avalanche" ? "bg-destructive/10 text-destructive" : "bg-accent/10 text-accent"
+                  }`}>
+                    {method === "avalanche" ? `${Number(l.interest_rate)}%` : fmtK(Number(l.outstanding_balance))}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">{i === 0 ? "Focus here" : "Minimum only"}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );

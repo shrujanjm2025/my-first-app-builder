@@ -2,212 +2,159 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Slider } from "@/components/ui/slider";
-import { Progress } from "@/components/ui/progress";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { CreditCard, TrendingUp, AlertTriangle, CheckCircle2, Info } from "lucide-react";
+import { Check, CreditCard, Info } from "lucide-react";
 import { toast } from "sonner";
+
+const fmtK = (n: number) => n >= 100000 ? `₹${(n / 100000).toFixed(1)}L` : n >= 1000 ? `₹${(n / 1000).toFixed(0)}K` : `₹${n}`;
+const pct = (a: number, b: number) => b === 0 ? 0 : Math.round((a / b) * 100);
 
 export default function CreditScore() {
   const { user } = useAuth();
-  const [score, setScore] = useState([650]);
-  const [creditLimit, setCreditLimit] = useState("100000");
-  const [creditUsed, setCreditUsed] = useState("25000");
-  const [onTimePayments, setOnTimePayments] = useState(true);
-  const [oldestAccount, setOldestAccount] = useState("3");
-  const [recentInquiries, setRecentInquiries] = useState("1");
+  const [score, setScore] = useState(650);
+  const [sim, setSim] = useState({ payOnTime: false, reduceUtil: false, noNewDebt: false, payOldDebt: false });
 
   useEffect(() => {
     if (!user) return;
     supabase.from("profiles").select("credit_score").eq("id", user.id).single().then(({ data }) => {
-      if (data?.credit_score) setScore([data.credit_score]);
+      if (data?.credit_score) setScore(data.credit_score);
     });
   }, [user]);
 
-  const utilization = parseFloat(creditUsed) / Math.max(parseFloat(creditLimit) || 1, 1) * 100;
-  const utilizationOk = utilization <= 30;
+  const simScore = Math.min(900, score + (sim.payOnTime ? 15 : 0) + (sim.reduceUtil ? 20 : 0) + (sim.noNewDebt ? 8 : 0) + (sim.payOldDebt ? 12 : 0));
 
-  // Simulate score impact
-  const simulateScore = () => {
-    let simulated = score[0];
-    if (utilizationOk) simulated += 20;
-    else if (utilization > 50) simulated -= 30;
-    else simulated -= 10;
-    if (onTimePayments) simulated += 15;
-    else simulated -= 50;
-    if (parseInt(oldestAccount) >= 5) simulated += 10;
-    if (parseInt(recentInquiries) > 3) simulated -= 15;
-    return Math.min(900, Math.max(300, simulated));
-  };
-
-  const simulated = simulateScore();
-  const diff = simulated - score[0];
-
-  const getScoreColor = (s: number) => {
-    if (s >= 750) return "text-[hsl(var(--success))]";
-    if (s >= 650) return "text-primary";
-    if (s >= 500) return "text-[hsl(var(--warning))]";
-    return "text-destructive";
-  };
-
-  const getScoreLabel = (s: number) => {
-    if (s >= 750) return "Excellent";
-    if (s >= 650) return "Good";
-    if (s >= 500) return "Fair";
-    return "Poor";
-  };
-
-  const suggestions = [
-    { check: utilizationOk, text: "Keep credit utilization below 30%", impact: "High" },
-    { check: onTimePayments, text: "Always pay bills on time", impact: "Very High" },
-    { check: parseInt(oldestAccount) >= 5, text: "Maintain older credit accounts (5+ years)", impact: "Medium" },
-    { check: parseInt(recentInquiries) <= 2, text: "Limit hard inquiries (max 2/year)", impact: "Low" },
-    { check: utilization > 0, text: "Use credit cards regularly but responsibly", impact: "Medium" },
+  const cards = [
+    { name: "HDFC Regalia", limit: 200000, used: 45000 },
+    { name: "ICICI Amazon Pay", limit: 150000, used: 38000 },
+    { name: "Axis ACE", limit: 100000, used: 12000 },
   ];
 
-  const handleSaveScore = async () => {
+  const getScoreColor = (s: number) => s >= 750 ? "hsl(166,100%,45%)" : s >= 650 ? "hsl(43,96%,56%)" : "hsl(0,91%,71%)";
+  const getScoreLabel = (s: number) => s >= 800 ? "Exceptional" : s >= 750 ? "Excellent" : s >= 700 ? "Good" : s >= 650 ? "Fair" : "Poor";
+
+  const handleSave = async () => {
     if (!user) return;
-    await supabase.from("profiles").update({ credit_score: score[0] }).eq("id", user.id);
+    await supabase.from("profiles").update({ credit_score: score }).eq("id", user.id);
     toast.success("Credit score saved");
   };
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold">Credit Score Simulator</h1>
-          <p className="text-muted-foreground">Track and improve your credit health</p>
+      <div className="animate-fadeUp space-y-4">
+        <div className="flex justify-between items-start mb-5">
+          <div>
+            <h2 className="font-heading text-xl font-extrabold mb-1">Credit Score Simulator</h2>
+            <p className="text-[13px] text-muted-foreground">Monitor utilization, simulate improvements, stay below 30%</p>
+          </div>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          {/* Current Score */}
-          <Card className="shadow-soft border-0">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CreditCard className="h-5 w-5 text-primary" />Your Credit Score
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="text-center">
-                <p className={`text-6xl font-bold font-heading ${getScoreColor(score[0])}`}>{score[0]}</p>
-                <Badge className="mt-2" variant="outline">{getScoreLabel(score[0])}</Badge>
-              </div>
-              <Slider value={score} onValueChange={setScore} min={300} max={900} step={10} />
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>300 (Poor)</span><span>900 (Excellent)</span>
-              </div>
-              <Button onClick={handleSaveScore} className="w-full gradient-primary text-primary-foreground">Save Score</Button>
-            </CardContent>
-          </Card>
-
-          {/* Simulated Score */}
-          <Card className="shadow-soft border-0">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-primary" />Simulated Score
-              </CardTitle>
-              <CardDescription>Based on your inputs below</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="text-center">
-                <p className={`text-6xl font-bold font-heading ${getScoreColor(simulated)}`}>{simulated}</p>
-                <p className={`text-sm font-medium mt-1 ${diff > 0 ? 'text-[hsl(var(--success))]' : diff < 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
-                  {diff > 0 ? `+${diff} improvement` : diff < 0 ? `${diff} drop` : "No change"}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Credit Card Management */}
-        <Card className="shadow-soft border-0">
-          <CardHeader>
-            <CardTitle>Credit Card Utilization</CardTitle>
-            <CardDescription>Keep below 30% for optimal credit health</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Total Credit Limit</Label>
-                <Input type="number" value={creditLimit} onChange={e => setCreditLimit(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label>Total Credit Used</Label>
-                <Input type="number" value={creditUsed} onChange={e => setCreditUsed(e.target.value)} />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Score Gauge */}
+          <div className="bg-card border border-border rounded-2xl p-8 text-center">
+            <div className="text-[13px] text-muted-foreground font-semibold mb-2 uppercase tracking-wider">LIVE CREDIT SCORE</div>
+            <div className="relative inline-block mb-3">
+              <svg width="160" height="90" viewBox="0 0 160 90">
+                <path d="M 10 80 A 70 70 0 0 1 150 80" fill="none" stroke="hsl(var(--muted))" strokeWidth="12" strokeLinecap="round" />
+                <path d="M 10 80 A 70 70 0 0 1 150 80" fill="none" stroke={getScoreColor(score)} strokeWidth="12" strokeLinecap="round"
+                  strokeDasharray={`${((score - 300) / 600) * 220} 220`} style={{ transition: "stroke-dasharray 0.8s ease" }} />
+              </svg>
+              <div className="absolute bottom-1 left-1/2 -translate-x-1/2 text-center">
+                <div className="font-mono text-[32px] font-bold" style={{ color: getScoreColor(score) }}>{score}</div>
+                <div className="text-xs font-semibold" style={{ color: getScoreColor(score) }}>{getScoreLabel(score)}</div>
               </div>
             </div>
-            <div>
-              <div className="flex justify-between text-sm mb-1">
-                <span>Utilization: {utilization.toFixed(1)}%</span>
-                <span className={utilizationOk ? "text-[hsl(var(--success))]" : "text-destructive"}>
-                  {utilizationOk ? "✅ Good" : "⚠️ Too High"}
-                </span>
-              </div>
-              <Progress value={Math.min(utilization, 100)} className={utilizationOk ? "[&>div]:bg-[hsl(var(--success))]" : "[&>div]:bg-destructive"} />
+            <div className="flex justify-between text-[10px] text-muted-foreground/50 mb-4">
+              <span>300 Poor</span><span>550 Fair</span><span>700 Good</span><span>900 Excellent</span>
             </div>
-          </CardContent>
-        </Card>
+            <input type="range" min={300} max={900} step={10} value={score} onChange={e => setScore(+e.target.value)}
+              className="w-full accent-primary mb-3" />
+            <button onClick={handleSave}
+              className="gradient-primary text-primary-foreground font-heading font-bold py-2 px-5 rounded-xl text-sm w-full hover:shadow-[0_6px_22px_hsl(var(--primary)/0.32)] transition-all">
+              Save Score
+            </button>
+          </div>
 
-        {/* Factors */}
-        <Card className="shadow-soft border-0">
-          <CardHeader><CardTitle>Simulation Factors</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center space-x-3">
-              <Checkbox checked={onTimePayments} onCheckedChange={c => setOnTimePayments(!!c)} />
-              <Label className="font-normal">I always pay bills on time</Label>
-            </div>
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Oldest Account Age (years)</Label>
-                <Input type="number" value={oldestAccount} onChange={e => setOldestAccount(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label>Recent Hard Inquiries</Label>
-                <Input type="number" value={recentInquiries} onChange={e => setRecentInquiries(e.target.value)} />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Suggestions */}
-        <Card className="shadow-soft border-0">
-          <CardHeader><CardTitle>Improvement Suggestions</CardTitle></CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {suggestions.map((s, i) => (
-                <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-secondary/50">
-                  {s.check ? <CheckCircle2 className="h-5 w-5 text-[hsl(var(--success))] mt-0.5" /> : <AlertTriangle className="h-5 w-5 text-[hsl(var(--warning))] mt-0.5" />}
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">{s.text}</p>
-                    <p className="text-xs text-muted-foreground">Impact: {s.impact}</p>
-                  </div>
+          {/* Simulator */}
+          <div className="bg-card border border-border rounded-2xl p-5">
+            <h3 className="font-heading text-sm font-bold mb-1">Score Simulator</h3>
+            <p className="text-xs text-muted-foreground mb-4">Toggle actions to see impact</p>
+            {[
+              { key: "payOnTime", label: "Pay all bills on time", impact: "+15" },
+              { key: "reduceUtil", label: "Reduce utilization below 30%", impact: "+20" },
+              { key: "noNewDebt", label: "Avoid new credit inquiries", impact: "+8" },
+              { key: "payOldDebt", label: "Pay off old debt/collections", impact: "+12" },
+            ].map((s, i) => (
+              <div key={i} onClick={() => setSim(p => ({ ...p, [s.key]: !p[s.key as keyof typeof p] }))}
+                className={`flex items-center gap-2.5 p-3 rounded-xl mb-2 cursor-pointer border transition-all ${
+                  sim[s.key as keyof typeof sim] ? "bg-primary/10 border-primary/20" : "bg-secondary border-transparent"
+                }`}>
+                <div className={`w-[18px] h-[18px] rounded-[5px] flex items-center justify-center flex-shrink-0 transition-all ${
+                  sim[s.key as keyof typeof sim] ? "bg-primary" : "bg-muted-foreground/30"
+                }`}>
+                  {sim[s.key as keyof typeof sim] && <Check className="h-[11px] w-[11px] text-primary-foreground" />}
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Offset Account Info */}
-        <Card className="shadow-soft border-0 bg-primary/5">
-          <CardContent className="p-5">
-            <div className="flex items-start gap-3">
-              <Info className="h-5 w-5 text-primary mt-0.5" />
-              <div>
-                <p className="font-semibold">Offset Account Tip</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  An offset account is a savings account linked to your home loan. The balance in this account offsets the loan principal, reducing interest charges. 
-                  For example, with a ₹50,00,000 loan and ₹5,00,000 in your offset account, you only pay interest on ₹45,00,000. 
-                  Combined with paying 1 extra EMI per year, you can save years off your loan tenure.
-                </p>
+                <span className={`flex-1 text-[13px] ${sim[s.key as keyof typeof sim] ? "text-primary" : ""}`}>{s.label}</span>
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-primary/10 text-primary">{s.impact}</span>
+              </div>
+            ))}
+            <div className="h-px bg-border my-3" />
+            <div className="flex justify-between items-center">
+              <span className="text-[13px] text-muted-foreground">Projected score:</span>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-sm text-muted-foreground">{score}</span>
+                <span className="text-muted-foreground/40">→</span>
+                <span className="font-mono text-xl font-bold" style={{ color: getScoreColor(simScore) }}>{simScore}</span>
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-primary/10 text-primary">+{simScore - score}</span>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
+
+        {/* Credit Card Utilization */}
+        <div className="bg-card border border-border rounded-2xl p-5">
+          <h3 className="font-heading text-sm font-bold mb-1">Credit Card Utilization</h3>
+          <p className="text-xs text-muted-foreground mb-4">Keep below 30% per card and overall for best score impact</p>
+          <div className="flex flex-col gap-3.5">
+            {cards.map((c, i) => {
+              const util = pct(c.used, c.limit);
+              const color = util > 30 ? "hsl(0,91%,71%)" : util > 20 ? "hsl(43,96%,56%)" : "hsl(166,100%,45%)";
+              return (
+                <div key={i}>
+                  <div className="flex justify-between items-center mb-2">
+                    <div className="flex items-center gap-2.5">
+                      <CreditCard className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-medium text-sm">{c.name}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-[13px] text-muted-foreground">{fmtK(c.used)} / {fmtK(c.limit)}</span>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                        util > 30 ? "bg-destructive/10 text-destructive" : util > 20 ? "bg-[hsl(var(--warning))]/10 text-[hsl(var(--warning))]" : "bg-primary/10 text-primary"
+                      }`}>{util}%</span>
+                    </div>
+                  </div>
+                  <div className="h-2 bg-muted rounded-full overflow-hidden">
+                    <div className="h-full rounded-full transition-all" style={{ width: `${util}%`, background: color }} />
+                  </div>
+                  {util > 30 && <p className="text-[11px] text-destructive mt-1">⚠️ Over 30% utilization. Pay down {fmtK(c.used - c.limit * 0.3)} to reach ideal range.</p>}
+                </div>
+              );
+            })}
+          </div>
+          <div className="h-px bg-border my-4" />
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-secondary rounded-xl p-3 text-center">
+              <div className="font-mono text-lg font-semibold">{pct(cards.reduce((a, c) => a + c.used, 0), cards.reduce((a, c) => a + c.limit, 0))}%</div>
+              <div className="text-[11px] text-muted-foreground mt-1">Overall Utilization</div>
+            </div>
+            <div className="bg-primary/10 rounded-xl p-3 text-center border border-primary/10">
+              <div className="font-mono text-lg font-semibold text-primary">30%</div>
+              <div className="text-[11px] text-primary mt-1">Ideal Maximum</div>
+            </div>
+            <div className="bg-secondary rounded-xl p-3 text-center">
+              <div className="font-mono text-lg font-semibold text-[hsl(var(--warning))]">{fmtK(Math.max(0, cards.reduce((a, c) => a + c.used, 0) - cards.reduce((a, c) => a + c.limit * 0.3, 0)))}</div>
+              <div className="text-[11px] text-muted-foreground mt-1">To Pay Down</div>
+            </div>
+          </div>
+        </div>
       </div>
     </DashboardLayout>
   );

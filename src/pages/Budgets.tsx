@@ -2,17 +2,19 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, PiggyBank, AlertTriangle } from "lucide-react";
+import { Plus, PiggyBank } from "lucide-react";
 import { toast } from "sonner";
 
+const fmtK = (n: number) => n >= 100000 ? `₹${(n / 100000).toFixed(1)}L` : n >= 1000 ? `₹${(n / 1000).toFixed(0)}K` : `₹${n}`;
+const pct = (a: number, b: number) => b === 0 ? 0 : Math.round((a / b) * 100);
+
 const BUDGET_CATEGORIES = ["Housing", "Food", "Transport", "Entertainment", "Healthcare", "Shopping", "Utilities", "Education", "Savings", "Groceries", "Other"];
+const CAT_ICONS: Record<string, string> = { Housing: "🏠", Food: "🍽️", Transport: "🚗", Entertainment: "🎬", Healthcare: "🏥", Shopping: "🛍️", Utilities: "⚡", Education: "📚", Savings: "💰", Groceries: "🛒", Other: "📋" };
 
 interface Budget { id: string; category: string; allocated_amount: number; month: string; }
 
@@ -51,141 +53,127 @@ export default function Budgets() {
     else { toast.success("Budget set"); setOpen(false); setForm({ category: "", amount: "" }); fetchData(); }
   };
 
-  const totalBudget = budgets.reduce((s, b) => s + Number(b.allocated_amount), 0);
   const totalSpent = Object.values(spending).reduce((s, v) => s + v, 0);
 
-  // 50/30/20 breakdown
-  const needs = monthlySalary * 0.5;
-  const wants = monthlySalary * 0.3;
-  const savingsDebt = monthlySalary * 0.2;
-
-  // Overspending alerts
-  const overBudgetCategories = budgets.filter(b => (spending[b.category] || 0) > Number(b.allocated_amount));
+  const needs = { budget: monthlySalary * 0.5, spent: totalSpent * 0.5 };
+  const wants = { budget: monthlySalary * 0.3, spent: totalSpent * 0.3 };
+  const savings = { budget: monthlySalary * 0.2, spent: totalSpent * 0.2 };
+  const emergTarget = needs.budget * 6;
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
+      <div className="animate-fadeUp space-y-4">
+        <div className="flex justify-between items-start mb-5">
           <div>
-            <h1 className="text-3xl font-bold">Budgets</h1>
-            <p className="text-muted-foreground">{new Date().toLocaleDateString("en", { month: "long", year: "numeric" })}</p>
+            <h2 className="font-heading text-xl font-extrabold mb-1">Budget Manager</h2>
+            <p className="text-[13px] text-muted-foreground">50/30/20 rule · {new Date().toLocaleDateString("en", { month: "long", year: "numeric" })}</p>
           </div>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button className="gradient-primary text-primary-foreground"><Plus className="h-4 w-4 mr-2" />Set Budget</Button>
+              <button className="gradient-primary text-primary-foreground font-heading font-bold py-2 px-4 rounded-xl text-sm flex items-center gap-1.5 hover:shadow-[0_6px_22px_hsl(var(--primary)/0.32)] transition-all">
+                <Plus className="h-4 w-4" /> Set Budget
+              </button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader><DialogTitle>Set Category Budget</DialogTitle></DialogHeader>
               <form onSubmit={handleAdd} className="space-y-4">
                 <div className="space-y-2">
                   <Label>Category</Label>
-                  <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
+                  <Select value={form.category} onValueChange={v => setForm({ ...form, category: v })}>
                     <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
                     <SelectContent>{BUDGET_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2"><Label>Amount</Label><Input type="number" step="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} required /></div>
+                <div className="space-y-2"><Label>Amount (₹)</Label><Input type="number" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} required /></div>
                 <Button type="submit" className="w-full gradient-primary text-primary-foreground">Set Budget</Button>
               </form>
             </DialogContent>
           </Dialog>
         </div>
 
-        {/* Overspending Alerts */}
-        {overBudgetCategories.length > 0 && (
-          <Card className="shadow-soft border-0 border-l-4 border-l-destructive">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <AlertTriangle className="h-4 w-4 text-destructive" />
-                <span className="font-semibold text-sm text-destructive">Overspending Alert!</span>
-              </div>
-              {overBudgetCategories.map(b => (
-                <p key={b.id} className="text-sm text-muted-foreground">
-                  {b.category}: ${(spending[b.category] || 0).toFixed(2)} spent of ${Number(b.allocated_amount).toFixed(2)} budget
-                </p>
-              ))}
-            </CardContent>
-          </Card>
+        {/* Monthly Income Card */}
+        {monthlySalary > 0 && (
+          <div className="bg-card border border-border rounded-2xl p-5 bg-gradient-to-br from-primary/5 to-accent/3">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-heading text-[15px] font-bold">Monthly Income</h3>
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-mono font-semibold bg-primary/10 text-primary">{fmtK(monthlySalary)}</span>
+            </div>
+          </div>
         )}
 
-        {/* 50/30/20 Rule */}
-        <Card className="shadow-soft border-0 gradient-primary text-primary-foreground">
-          <CardContent className="p-5">
-            <div className="flex items-center gap-3 mb-3">
-              <PiggyBank className="h-5 w-5" />
-              <span className="font-semibold">50/30/20 Rule</span>
-            </div>
-            {monthlySalary > 0 ? (
-              <div className="grid grid-cols-3 gap-4 text-sm">
-                <div>
-                  <p className="text-primary-foreground/70">50% Needs</p>
-                  <p className="text-lg font-bold font-heading">${needs.toFixed(0)}</p>
+        {/* 50/30/20 Cards */}
+        {monthlySalary > 0 && (
+          <div className="grid grid-cols-3 gap-3.5">
+            {[
+              { label: "Needs (50%)", d: needs, color: "hsl(217,94%,68%)", desc: "Rent, groceries, utilities, EMIs" },
+              { label: "Wants (30%)", d: wants, color: "hsl(270,95%,75%)", desc: "Dining, entertainment, shopping" },
+              { label: "Savings (20%)", d: savings, color: "hsl(166,100%,45%)", desc: "Investments, RDs, goals" },
+            ].map(({ label, d, color, desc }, i) => (
+              <div key={i} className="bg-card border border-border rounded-2xl p-5 hover:-translate-y-0.5 hover:shadow-elevated transition-all">
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2.5">{label}</div>
+                <div className="font-mono text-[22px] font-semibold mb-1">{fmtK(d.spent)}</div>
+                <div className="text-[11px] text-muted-foreground/60 mb-3">of {fmtK(d.budget)} · {desc}</div>
+                <div className="h-[5px] bg-muted rounded-full overflow-hidden">
+                  <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, pct(d.spent, d.budget))}%`, background: d.spent > d.budget ? "hsl(0,91%,71%)" : color }} />
                 </div>
-                <div>
-                  <p className="text-primary-foreground/70">30% Wants</p>
-                  <p className="text-lg font-bold font-heading">${wants.toFixed(0)}</p>
-                </div>
-                <div>
-                  <p className="text-primary-foreground/70">20% Savings</p>
-                  <p className="text-lg font-bold font-heading">${savingsDebt.toFixed(0)}</p>
+                <div className="flex justify-between mt-1.5 text-[11px]">
+                  <span style={{ color: d.spent > d.budget ? "hsl(0,91%,71%)" : "hsl(var(--muted-foreground))" }}>{pct(d.spent, d.budget)}% used</span>
+                  <span style={{ color: d.spent > d.budget ? "hsl(0,91%,71%)" : "hsl(166,100%,45%)" }}>
+                    {d.spent > d.budget ? `+${fmtK(d.spent - d.budget)} over` : `${fmtK(d.budget - d.spent)} left`}
+                  </span>
                 </div>
               </div>
-            ) : (
-              <p className="text-sm text-primary-foreground/80">Set your monthly salary in Settings to see 50/30/20 breakdown</p>
-            )}
-            <div className="flex gap-2 mt-3">
-              <div className="flex-1 h-2 rounded-full bg-primary-foreground/40" />
-              <div className="w-[30%] h-2 rounded-full bg-primary-foreground/25" />
-              <div className="w-[20%] h-2 rounded-full bg-primary-foreground/15" />
+            ))}
+          </div>
+        )}
+
+        {/* Emergency Fund */}
+        {monthlySalary > 0 && (
+          <div className="bg-card border border-border rounded-2xl p-5">
+            <div className="flex justify-between items-start mb-3">
+              <div>
+                <h3 className="font-heading text-[15px] font-bold">🛡️ Emergency Fund</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">Target: 6 months of essential expenses = {fmtK(emergTarget)}</p>
+              </div>
             </div>
-          </CardContent>
-        </Card>
+            <div className="h-2.5 bg-muted rounded-full overflow-hidden mb-2">
+              <div className="h-full rounded-full transition-all" style={{ width: "0%", background: "linear-gradient(90deg, hsl(43,96%,56%), hsl(166,100%,45%))" }} />
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="font-mono text-primary">Current: ₹0</span>
+              <span className="font-mono text-muted-foreground">Needed: {fmtK(emergTarget)}</span>
+            </div>
+          </div>
+        )}
 
-        {/* Overview */}
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Card className="shadow-soft border-0">
-            <CardContent className="p-5">
-              <p className="text-sm text-muted-foreground mb-1">Total Budget</p>
-              <p className="text-2xl font-bold font-heading">${totalBudget.toFixed(2)}</p>
-            </CardContent>
-          </Card>
-          <Card className="shadow-soft border-0">
-            <CardContent className="p-5">
-              <p className="text-sm text-muted-foreground mb-1">Total Spent</p>
-              <p className={`text-2xl font-bold font-heading ${totalSpent > totalBudget ? "text-destructive" : ""}`}>${totalSpent.toFixed(2)}</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Budget cards */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {budgets.map(b => {
-            const spent = spending[b.category] || 0;
-            const pct = Math.min((spent / Number(b.allocated_amount)) * 100, 100);
-            const over = spent > Number(b.allocated_amount);
-            return (
-              <Card key={b.id} className="shadow-soft border-0">
-                <CardContent className="p-5 space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="font-medium">{b.category}</span>
-                    <span className={`text-sm font-semibold ${over ? "text-destructive" : "text-[hsl(var(--success))]"}`}>
-                      {over ? "Over budget" : `${(100 - pct).toFixed(0)}% left`}
-                    </span>
+        {/* Spending Categories */}
+        <div className="bg-card border border-border rounded-2xl p-5">
+          <h3 className="font-heading text-sm font-bold mb-4">Spending Categories</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {budgets.map((b, i) => {
+              const spent = spending[b.category] || 0;
+              const over = spent > Number(b.allocated_amount);
+              return (
+                <div key={i} className="flex items-center gap-3 p-3 bg-secondary rounded-xl">
+                  <span className="text-xl">{CAT_ICONS[b.category] || "📋"}</span>
+                  <div className="flex-1">
+                    <div className="flex justify-between mb-1">
+                      <span className="text-xs font-medium">{b.category}</span>
+                      {over && <span className="text-[10px] text-destructive font-semibold">OVER</span>}
+                    </div>
+                    <div className="h-[5px] bg-muted rounded-full overflow-hidden">
+                      <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, pct(spent, Number(b.allocated_amount)))}%`, background: over ? "hsl(0,91%,71%)" : "hsl(166,100%,45%)" }} />
+                    </div>
+                    <div className="flex justify-between mt-1">
+                      <span className="font-mono text-[10px]" style={{ color: over ? "hsl(0,91%,71%)" : "hsl(166,100%,45%)" }}>{fmtK(spent)}</span>
+                      <span className="font-mono text-[10px] text-muted-foreground">{fmtK(Number(b.allocated_amount))}</span>
+                    </div>
                   </div>
-                  <Progress value={pct} className={over ? "[&>div]:bg-destructive" : "[&>div]:bg-[hsl(var(--success))]"} />
-                  <div className="flex justify-between text-sm text-muted-foreground">
-                    <span>${spent.toFixed(2)} spent</span>
-                    <span>${Number(b.allocated_amount).toFixed(2)} budget</span>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-          {budgets.length === 0 && (
-            <Card className="shadow-soft border-0 col-span-full">
-              <CardContent className="p-8 text-center text-muted-foreground">No budgets set for this month. Click "Set Budget" to get started.</CardContent>
-            </Card>
-          )}
+                </div>
+              );
+            })}
+          </div>
+          {budgets.length === 0 && <p className="text-center text-sm text-muted-foreground py-4">No budgets set. Click "Set Budget" to start.</p>}
         </div>
       </div>
     </DashboardLayout>

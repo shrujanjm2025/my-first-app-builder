@@ -2,219 +2,153 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Textarea } from "@/components/ui/textarea";
-import { Slider } from "@/components/ui/slider";
-import { Wallet, ArrowRight, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
+import { Wallet, Check } from "lucide-react";
 
-const STEPS = [
-  { title: "Basic Info", desc: "Let's personalize your experience" },
-  { title: "Income & Assets", desc: "Your financial starting point" },
-  { title: "Loans & Debt", desc: "What you owe" },
-  { title: "Insurance", desc: "Your safety net" },
-  { title: "Credit & Savings", desc: "Credit health and savings" },
-  { title: "Goals", desc: "What you want to achieve" },
+const QUESTIONS = [
+  { q: "What is your full name?", sub: "We'll personalize your dashboard with this.", key: "name", type: "text" as const, placeholder: "e.g. Arjun Sharma" },
+  { q: "What is your email address?", sub: "For alerts, login and secure notifications.", key: "email", type: "email" as const, placeholder: "arjun@example.com" },
+  { q: "What is your monthly salary after taxes?", sub: "Optional — used to set up your 50/30/20 budget.", key: "salary", type: "number" as const, placeholder: "₹85,000", hint: "In INR" },
+  { q: "Any other income sources or assets?", sub: "Freelance, rental income, investments, FDs/RDs.", key: "otherIncome", type: "textarea" as const, placeholder: "e.g. Freelance ₹10,000/mo, Rental ₹22,000/mo" },
+  { q: "What types of loans do you have?", sub: "Select all that apply. You can add details later.", key: "loans", type: "checkboxes" as const, options: ["Home Loan", "Personal Loan", "Car Loan", "Credit Card Debt", "Education Loan", "Other"] },
+  { q: "Do you have any insurance policies?", sub: "We'll set renewal alerts and budget for premiums.", key: "insurance", type: "checkboxes" as const, options: ["Health Insurance", "Life Insurance", "Home Insurance", "Car Insurance", "Other"] },
+  { q: "What is your approximate credit score?", sub: "Optional (300–900). We'll simulate improvements.", key: "creditScore", type: "slider" as const, min: 300, max: 900, step: 10 },
+  { q: "Do you have any FDs or RDs?", sub: "We'll track maturity, interest and compound growth.", key: "deposits", type: "checkboxes" as const, options: ["Fixed Deposit (FD)", "Recurring Deposit (RD)", "PPF", "Mutual Funds", "Stocks"] },
+  { q: "How many dependents do you have?", sub: "Adjusts your needs allocation and emergency fund.", key: "dependents", type: "number" as const, placeholder: "0", hint: "family members / children" },
+  { q: "What are your 3–4 SMART financial goals?", sub: "Specific, Measurable, Achievable, Relevant, Time-bound.", key: "goals", type: "textarea" as const, placeholder: "e.g. Save ₹50,000 emergency fund by March 2025\nPay off ₹20,000 credit card by April 2025\nVacation fund ₹40,000 by May 2025" },
 ];
-
-const LOAN_TYPES = ["Home Loan", "Personal Loan", "Car Loan", "Credit Card Debt", "Education Loan", "Other"];
-const INSURANCE_TYPES = ["Health", "Life", "Home", "Car", "Other"];
 
 export default function Onboarding() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
+  const [data, setData] = useState<Record<string, any>>({ loans: [], insurance: [], deposits: [], creditScore: 650 });
   const [loading, setLoading] = useState(false);
 
-  const [fullName, setFullName] = useState("");
-  const [monthlySalary, setMonthlySalary] = useState("");
-  const [otherIncome, setOtherIncome] = useState("");
-  const [dependents, setDependents] = useState("0");
-  const [selectedLoans, setSelectedLoans] = useState<string[]>([]);
-  const [selectedInsurance, setSelectedInsurance] = useState<string[]>([]);
-  const [creditScore, setCreditScore] = useState([650]);
-  const [hasFD, setHasFD] = useState(false);
-  const [hasRD, setHasRD] = useState(false);
-  const [goals, setGoals] = useState("");
-  const [currency, setCurrency] = useState("INR");
+  const q = QUESTIONS[step];
+  const progress = (step / QUESTIONS.length) * 100;
+
+  const toggle = (key: string, val: string) => {
+    setData(p => ({
+      ...p,
+      [key]: (p[key] || []).includes(val) ? p[key].filter((x: string) => x !== val) : [...(p[key] || []), val]
+    }));
+  };
 
   const handleFinish = async () => {
     if (!user) return;
     setLoading(true);
     const { error } = await supabase.from("profiles").update({
-      full_name: fullName,
-      monthly_salary: parseFloat(monthlySalary) || 0,
-      dependents: parseInt(dependents) || 0,
-      credit_score: creditScore[0],
-      currency,
+      full_name: data.name || "",
+      monthly_salary: parseFloat(data.salary) || 0,
+      dependents: parseInt(data.dependents) || 0,
+      credit_score: data.creditScore || 650,
       onboarding_completed: true,
     }).eq("id", user.id);
 
-    if (error) {
-      toast.error(error.message);
-    } else {
-      toast.success("Welcome to FinanceFlow! 🎉");
-      navigate("/dashboard");
-    }
+    if (error) toast.error(error.message);
+    else { toast.success("Welcome to WealthOS! 🎉"); navigate("/dashboard"); }
     setLoading(false);
   };
 
-  const canNext = () => {
-    if (step === 0) return fullName.trim().length > 0;
-    return true;
-  };
+  const getScoreColor = (s: number) => s >= 750 ? "text-primary" : s >= 650 ? "text-[hsl(var(--warning))]" : "text-destructive";
+  const getScoreLabel = (s: number) => s >= 750 ? "Excellent" : s >= 650 ? "Good" : "Fair";
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="w-full max-w-lg">
-        <div className="flex items-center gap-3 mb-8 justify-center">
-          <div className="p-2 rounded-xl gradient-primary">
-            <Wallet className="h-6 w-6 text-primary-foreground" />
+    <div className="min-h-screen bg-background flex items-center justify-center p-5">
+      {/* Progress bar */}
+      <div className="fixed top-0 left-0 right-0 h-[3px] bg-muted z-50">
+        <div className="h-full gradient-primary transition-all duration-500" style={{ width: `${progress}%` }} />
+      </div>
+
+      <div className="animate-fadeUp w-full max-w-[520px]">
+        <div className="flex items-center gap-2.5 mb-9">
+          <div className="w-9 h-9 gradient-primary rounded-xl flex items-center justify-center">
+            <Wallet className="h-[17px] w-[17px] text-primary-foreground" />
           </div>
-          <span className="text-xl font-bold font-heading">FinanceFlow</span>
+          <span className="font-heading text-lg font-extrabold">WealthOS</span>
+          <span className="ml-auto text-xs text-muted-foreground">{step + 1} / {QUESTIONS.length}</span>
         </div>
 
-        {/* Progress */}
-        <div className="flex gap-1.5 mb-6">
-          {STEPS.map((_, i) => (
-            <div key={i} className={`h-1.5 flex-1 rounded-full transition-colors ${i <= step ? 'gradient-primary' : 'bg-muted'}`} />
-          ))}
-        </div>
+        <div className="bg-card border border-border rounded-2xl p-8">
+          <div className="mb-7">
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-primary/10 text-primary mb-3">
+              Question {step + 1}
+            </span>
+            <h2 className="font-heading text-xl font-extrabold leading-tight mb-1.5">{q.q}</h2>
+            <p className="text-[13px] text-muted-foreground">{q.sub}</p>
+          </div>
 
-        <Card className="shadow-elevated border-0">
-          <CardHeader>
-            <CardTitle>{STEPS[step].title}</CardTitle>
-            <CardDescription>{STEPS[step].desc}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {step === 0 && (
-              <>
-                <div className="space-y-2">
-                  <Label>Full Name *</Label>
-                  <Input value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Your full name" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Preferred Currency</Label>
-                  <Input value={currency} onChange={e => setCurrency(e.target.value)} placeholder="INR" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Number of Dependents</Label>
-                  <Input type="number" value={dependents} onChange={e => setDependents(e.target.value)} min="0" />
-                  <p className="text-xs text-muted-foreground">Helps adjust budgeting for family expenses</p>
-                </div>
-              </>
-            )}
-
-            {step === 1 && (
-              <>
-                <div className="space-y-2">
-                  <Label>Monthly Salary After Taxes ({currency})</Label>
-                  <Input type="number" value={monthlySalary} onChange={e => setMonthlySalary(e.target.value)} placeholder="e.g. 50000" />
-                  <p className="text-xs text-muted-foreground">Used for 50/30/20 budgeting and emergency fund calculation</p>
-                </div>
-                <div className="space-y-2">
-                  <Label>Other Income Sources ({currency}/month)</Label>
-                  <Input type="number" value={otherIncome} onChange={e => setOtherIncome(e.target.value)} placeholder="Freelance, rental, etc." />
-                </div>
-              </>
-            )}
-
-            {step === 2 && (
-              <>
-                <p className="text-sm text-muted-foreground">Select any loans you currently have:</p>
-                <div className="space-y-3">
-                  {LOAN_TYPES.map(loan => (
-                    <div key={loan} className="flex items-center space-x-3">
-                      <Checkbox
-                        checked={selectedLoans.includes(loan)}
-                        onCheckedChange={c => setSelectedLoans(c ? [...selectedLoans, loan] : selectedLoans.filter(l => l !== loan))}
-                      />
-                      <Label className="font-normal">{loan}</Label>
-                    </div>
-                  ))}
-                </div>
-                <p className="text-xs text-muted-foreground mt-2">You can add details later in the Loans section</p>
-              </>
-            )}
-
-            {step === 3 && (
-              <>
-                <p className="text-sm text-muted-foreground">Select insurance policies you have:</p>
-                <div className="space-y-3">
-                  {INSURANCE_TYPES.map(ins => (
-                    <div key={ins} className="flex items-center space-x-3">
-                      <Checkbox
-                        checked={selectedInsurance.includes(ins)}
-                        onCheckedChange={c => setSelectedInsurance(c ? [...selectedInsurance, ins] : selectedInsurance.filter(i => i !== ins))}
-                      />
-                      <Label className="font-normal">{ins}</Label>
-                    </div>
-                  ))}
-                </div>
-                <p className="text-xs text-muted-foreground mt-2">Add premiums and renewal dates in the Insurance section</p>
-              </>
-            )}
-
-            {step === 4 && (
-              <>
-                <div className="space-y-3">
-                  <Label>Approximate Credit Score (300-900)</Label>
-                  <Slider value={creditScore} onValueChange={setCreditScore} min={300} max={900} step={10} />
-                  <p className="text-center text-2xl font-bold font-heading text-primary">{creditScore[0]}</p>
-                  <p className="text-xs text-muted-foreground text-center">
-                    {creditScore[0] >= 750 ? "✅ Excellent" : creditScore[0] >= 650 ? "👍 Good" : creditScore[0] >= 500 ? "⚠️ Fair" : "🚨 Poor"}
-                  </p>
-                </div>
-                <div className="flex items-center space-x-3 pt-2">
-                  <Checkbox checked={hasFD} onCheckedChange={c => setHasFD(!!c)} />
-                  <Label className="font-normal">I have Fixed Deposits (FDs)</Label>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <Checkbox checked={hasRD} onCheckedChange={c => setHasRD(!!c)} />
-                  <Label className="font-normal">I have Recurring Deposits (RDs)</Label>
-                </div>
-              </>
-            )}
-
-            {step === 5 && (
-              <>
-                <div className="space-y-2">
-                  <Label>Your SMART Financial Goals</Label>
-                  <Textarea
-                    value={goals}
-                    onChange={e => setGoals(e.target.value)}
-                    placeholder={"e.g.\n• Save ₹5,000/mo for emergency fund\n• Pay off ₹2,000 credit card debt\n• Build RD for home down payment\n• Invest ₹3,000/mo in mutual funds"}
-                    rows={5}
-                  />
-                  <p className="text-xs text-muted-foreground">Make them Specific, Measurable, Achievable, Relevant, Time-bound</p>
-                </div>
-              </>
-            )}
-
-            <div className="flex justify-between pt-4">
-              <Button variant="outline" onClick={() => setStep(s => s - 1)} disabled={step === 0}>
-                <ArrowLeft className="h-4 w-4 mr-2" />Back
-              </Button>
-              {step < STEPS.length - 1 ? (
-                <Button className="gradient-primary text-primary-foreground" onClick={() => setStep(s => s + 1)} disabled={!canNext()}>
-                  Next<ArrowRight className="h-4 w-4 ml-2" />
-                </Button>
-              ) : (
-                <Button className="gradient-primary text-primary-foreground" onClick={handleFinish} disabled={loading}>
-                  {loading ? "Finishing..." : "Get Started 🚀"}
-                </Button>
-              )}
+          {(q.type === "text" || q.type === "email" || q.type === "number") && (
+            <div>
+              <input type={q.type} placeholder={q.placeholder} value={data[q.key] || ""} onChange={e => setData(p => ({ ...p, [q.key]: e.target.value }))} autoFocus
+                className="w-full bg-background/50 border border-border rounded-xl px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/40 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all" />
+              {q.hint && <p className="text-[11px] text-muted-foreground/50 mt-1.5">{q.hint}</p>}
             </div>
-          </CardContent>
-        </Card>
+          )}
 
-        <button onClick={() => { handleFinish(); }} className="text-sm text-muted-foreground hover:text-foreground mt-4 block text-center w-full">
-          Skip for now
-        </button>
+          {q.type === "textarea" && (
+            <textarea rows={4} placeholder={q.placeholder} value={data[q.key] || ""} onChange={e => setData(p => ({ ...p, [q.key]: e.target.value }))}
+              className="w-full bg-background/50 border border-border rounded-xl px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/40 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all resize-y" />
+          )}
+
+          {q.type === "checkboxes" && q.options && (
+            <div className="grid grid-cols-2 gap-2">
+              {q.options.map(opt => {
+                const checked = (data[q.key] || []).includes(opt);
+                return (
+                  <div key={opt} onClick={() => toggle(q.key, opt)}
+                    className={`flex items-center gap-2.5 p-3 rounded-xl cursor-pointer border transition-all ${
+                      checked ? "border-primary/40 bg-primary/10" : "border-border bg-background/30"
+                    }`}>
+                    <div className={`w-4 h-4 rounded-[5px] border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                      checked ? "border-primary bg-primary" : "border-muted-foreground"
+                    }`}>
+                      {checked && <Check className="h-2.5 w-2.5 text-primary-foreground" />}
+                    </div>
+                    <span className={`text-[13px] ${checked ? "text-primary font-medium" : ""}`}>{opt}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {q.type === "slider" && (
+            <div>
+              <div className="text-center mb-4">
+                <span className={`font-mono text-[40px] font-bold ${getScoreColor(data.creditScore)}`}>{data.creditScore}</span>
+                <span className={`ml-2.5 inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${
+                  data.creditScore >= 750 ? "bg-primary/10 text-primary" : data.creditScore >= 650 ? "bg-[hsl(var(--warning))]/10 text-[hsl(var(--warning))]" : "bg-destructive/10 text-destructive"
+                }`}>
+                  {getScoreLabel(data.creditScore)}
+                </span>
+              </div>
+              <input type="range" min={300} max={900} step={10} value={data.creditScore} onChange={e => setData(p => ({ ...p, creditScore: +e.target.value }))}
+                className="w-full accent-primary" />
+              <div className="flex justify-between text-[11px] text-muted-foreground/50 mt-1.5">
+                <span>300 — Poor</span><span>550 — Fair</span><span>700 — Good</span><span>900 — Excellent</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-2.5 mt-5">
+          {step > 0 && (
+            <button onClick={() => setStep(s => s - 1)}
+              className="flex-1 py-2.5 px-5 rounded-xl border border-border text-sm font-heading font-bold text-muted-foreground hover:bg-secondary transition-all">
+              ← Back
+            </button>
+          )}
+          <button onClick={() => step < QUESTIONS.length - 1 ? setStep(s => s + 1) : handleFinish()} disabled={loading}
+            className="flex-[2] gradient-primary text-primary-foreground font-heading font-bold py-2.5 px-5 rounded-xl text-sm hover:shadow-[0_6px_22px_hsl(var(--primary)/0.32)] hover:-translate-y-0.5 transition-all disabled:opacity-50">
+            {loading ? "Finishing..." : step < QUESTIONS.length - 1 ? "Continue →" : "🚀 Launch My Dashboard"}
+          </button>
+        </div>
+        {step < QUESTIONS.length - 1 && (
+          <p className="text-center text-xs text-muted-foreground/50 mt-3 cursor-pointer hover:text-muted-foreground" onClick={() => setStep(s => s + 1)}>
+            Skip this question
+          </p>
+        )}
       </div>
     </div>
   );

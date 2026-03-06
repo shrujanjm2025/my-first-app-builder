@@ -16,6 +16,7 @@ import Insurance from "./pages/Insurance";
 import CreditScore from "./pages/CreditScore";
 import BankAccounts from "./pages/BankAccounts";
 import Deposits from "./pages/Deposits";
+import Retirement from "./pages/Retirement";
 import Calculators from "./pages/Calculators";
 import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
@@ -43,6 +44,7 @@ const App = () => (
             <Route path="/credit-score" element={<ProtectedRoute><CreditScore /></ProtectedRoute>} />
             <Route path="/bank-accounts" element={<ProtectedRoute><BankAccounts /></ProtectedRoute>} />
             <Route path="/deposits" element={<ProtectedRoute><Deposits /></ProtectedRoute>} />
+            <Route path="/retirement" element={<ProtectedRoute><Retirement /></ProtectedRoute>} />
             <Route path="/calculators" element={<ProtectedRoute><Calculators /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />

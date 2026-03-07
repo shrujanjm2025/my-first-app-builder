@@ -8,8 +8,10 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid } from "recharts";
 
 const fmtK = (n: number) => n >= 100000 ? `₹${(n / 100000).toFixed(1)}L` : n >= 1000 ? `₹${(n / 1000).toFixed(0)}K` : `₹${n}`;
+const COLORS = ["hsl(166,100%,45%)", "hsl(217,94%,68%)", "hsl(270,95%,75%)", "hsl(43,96%,56%)", "hsl(0,91%,71%)", "hsl(190,100%,50%)"];
 
 interface FD { id: string; bank_name: string; amount: number; interest_rate: number; start_date: string; maturity_date: string; }
 interface RD { id: string; bank_name: string; monthly_amount: number; interest_rate: number; start_date: string; maturity_date: string; total_deposited: number; }
@@ -65,6 +67,26 @@ export default function Deposits() {
   const fdMaturity = (p: number, r: number, months: number) => p * Math.pow(1 + r / 400, months / 3);
   const rdMaturity = (p: number, r: number, months: number) => p * ((Math.pow(1 + r / 1200, months) - 1) / (r / 1200)) * (1 + r / 1200);
 
+  // Chart data
+  const allDeposits = [
+    ...fds.map(fd => ({ name: `${fd.bank_name} FD`, value: Number(fd.amount), type: "FD" as const })),
+    ...rds.map(rd => {
+      const months = Math.ceil((new Date(rd.maturity_date).getTime() - new Date(rd.start_date).getTime()) / (30 * 24 * 3600 * 1000));
+      return { name: `${rd.bank_name} RD`, value: Number(rd.monthly_amount) * months, type: "RD" as const };
+    }),
+  ];
+
+  // Growth projection for all FDs combined
+  const growthData = fds.length > 0 ? Array.from({ length: 13 }, (_, i) => {
+    const month = i;
+    const totalValue = fds.reduce((sum, fd) => {
+      const totalMonths = Math.ceil((new Date(fd.maturity_date).getTime() - new Date(fd.start_date).getTime()) / (30 * 24 * 3600 * 1000));
+      const m = Math.min(month, totalMonths);
+      return sum + fdMaturity(Number(fd.amount), Number(fd.interest_rate), m);
+    }, 0);
+    return { month: `M${month}`, value: Math.round(totalValue / 1000) };
+  }) : [];
+
   return (
     <DashboardLayout>
       <div className="animate-fadeUp space-y-4">
@@ -72,6 +94,64 @@ export default function Deposits() {
           <h2 className="font-heading text-xl font-extrabold mb-1">FD & RD Manager</h2>
           <p className="text-[13px] text-muted-foreground">Track deposits, maturity dates and compound interest growth</p>
         </div>
+
+        {/* Charts */}
+        {(fds.length > 0 || rds.length > 0) && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="bg-card border border-border rounded-2xl p-5">
+              <h3 className="font-heading text-sm font-bold mb-3">Deposit Allocation</h3>
+              {allDeposits.length > 0 ? (
+                <>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <PieChart>
+                      <Pie data={allDeposits} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="value">
+                        {allDeposits.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                      </Pie>
+                      <Tooltip content={({ active, payload }) => active && payload?.length ? (
+                        <div className="bg-card border border-border rounded-xl px-3 py-2 text-xs shadow-elevated">
+                          <div className="font-semibold">{payload[0].name}</div>
+                          <div className="text-primary font-mono">{fmtK(Number(payload[0].value))}</div>
+                        </div>
+                      ) : null} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="flex flex-wrap gap-2 mt-2 justify-center">
+                    {allDeposits.map((d, i) => (
+                      <div key={i} className="flex items-center gap-1.5 text-[11px]">
+                        <div className="w-2.5 h-2.5 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
+                        <span className="text-muted-foreground">{d.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : null}
+            </div>
+            {growthData.length > 0 && (
+              <div className="bg-card border border-border rounded-2xl p-5">
+                <h3 className="font-heading text-sm font-bold mb-3">FD Growth Projection</h3>
+                <ResponsiveContainer width="100%" height={200}>
+                  <AreaChart data={growthData} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="fdGrowth" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="hsl(166,100%,45%)" stopOpacity={0.25} />
+                        <stop offset="95%" stopColor="hsl(166,100%,45%)" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.5} />
+                    <XAxis dataKey="month" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `${v}K`} />
+                    <Tooltip content={({ active, payload }) => active && payload?.length ? (
+                      <div className="bg-card border border-border rounded-xl px-3 py-2 text-xs shadow-elevated">
+                        <div className="text-primary font-mono">₹{payload[0].value}K</div>
+                      </div>
+                    ) : null} />
+                    <Area type="monotone" dataKey="value" stroke="hsl(166,100%,45%)" strokeWidth={2.5} fill="url(#fdGrowth)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Fixed Deposits */}
         <div>

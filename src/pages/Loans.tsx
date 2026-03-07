@@ -7,8 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Trash2, Info, Check } from "lucide-react";
+import { Plus, Trash2, Info } from "lucide-react";
 import { toast } from "sonner";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 
 const fmtK = (n: number) => n >= 100000 ? `₹${(n / 100000).toFixed(1)}L` : n >= 1000 ? `₹${(n / 1000).toFixed(0)}K` : `₹${n}`;
 const pct = (a: number, b: number) => b === 0 ? 0 : Math.round((a / b) * 100);
@@ -16,6 +17,7 @@ const pct = (a: number, b: number) => b === 0 ? 0 : Math.round((a / b) * 100);
 interface Loan { id: string; name: string; type: string; principal: number; interest_rate: number; tenure_months: number; emi: number; outstanding_balance: number; start_date: string; }
 const LOAN_TYPES = ["home", "personal", "car", "education", "credit_card", "other"];
 const LOAN_ICONS: Record<string, string> = { home: "🏠", car: "🚗", credit_card: "💳", personal: "💰", education: "🎓", other: "📋" };
+const COLORS = ["hsl(166,100%,45%)", "hsl(217,94%,68%)", "hsl(270,95%,75%)", "hsl(43,96%,56%)", "hsl(0,91%,71%)", "hsl(190,100%,50%)"];
 
 export default function Loans() {
   const { user } = useAuth();
@@ -60,6 +62,13 @@ export default function Loans() {
   const avalancheOrder = [...loans].sort((a, b) => Number(b.interest_rate) - Number(a.interest_rate));
   const snowballOrder = [...loans].sort((a, b) => Number(a.outstanding_balance) - Number(b.outstanding_balance));
 
+  const pieData = loans.map(l => ({ name: l.name, value: Number(l.outstanding_balance) }));
+  const barData = loans.map(l => ({
+    name: l.name.length > 8 ? l.name.slice(0, 8) + "…" : l.name,
+    emi: Number(l.emi),
+    rate: Number(l.interest_rate),
+  }));
+
   return (
     <DashboardLayout>
       <div className="animate-fadeUp space-y-4">
@@ -101,11 +110,57 @@ export default function Loans() {
           </Dialog>
         </div>
 
-        {/* Offset account tip */}
         <div className="flex items-start gap-2.5 p-3 rounded-xl border bg-primary/10 border-primary/20 text-primary text-[13px] leading-relaxed">
           <Info className="h-4 w-4 flex-shrink-0 mt-0.5" />
           <div><strong>Offset account tip:</strong> Keeping ₹50,000 in an offset-linked account reduces your Home Loan interest significantly. Paying 1 extra EMI/year saves lakhs in total interest.</div>
         </div>
+
+        {/* Charts */}
+        {loans.length > 0 && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="bg-card border border-border rounded-2xl p-5">
+              <h3 className="font-heading text-sm font-bold mb-3">Debt Distribution</h3>
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="value">
+                    {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip content={({ active, payload }) => active && payload?.length ? (
+                    <div className="bg-card border border-border rounded-xl px-3 py-2 text-xs shadow-elevated">
+                      <div className="font-semibold">{payload[0].name}</div>
+                      <div className="text-destructive font-mono">{fmtK(Number(payload[0].value))}</div>
+                    </div>
+                  ) : null} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="flex flex-wrap gap-2 mt-2 justify-center">
+                {pieData.map((d, i) => (
+                  <div key={i} className="flex items-center gap-1.5 text-[11px]">
+                    <div className="w-2.5 h-2.5 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
+                    <span className="text-muted-foreground">{d.name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="bg-card border border-border rounded-2xl p-5">
+              <h3 className="font-heading text-sm font-bold mb-3">Monthly EMI Breakdown</h3>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={barData} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.5} />
+                  <XAxis dataKey="name" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <Tooltip content={({ active, payload }) => active && payload?.length ? (
+                    <div className="bg-card border border-border rounded-xl px-3 py-2 text-xs shadow-elevated">
+                      <div className="text-primary">EMI: {fmtK(Number(payload[0].value))}</div>
+                      <div className="text-muted-foreground">Rate: {payload[0].payload.rate}%</div>
+                    </div>
+                  ) : null} />
+                  <Bar dataKey="emi" fill="hsl(166,100%,45%)" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
 
         {/* Loan Cards */}
         {loans.length > 0 && (
@@ -201,7 +256,7 @@ export default function Loans() {
                   i === 0 ? (method === "avalanche" ? "bg-destructive/10 border-destructive/20" : "bg-primary/10 border-primary/20") : "bg-secondary border-transparent"
                 }`}>
                   <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-mono font-bold ${
-                    i === 0 ? (method === "avalanche" ? "bg-destructive text-white" : "bg-primary text-primary-foreground") : "bg-muted-foreground/30 text-background"
+                    i === 0 ? (method === "avalanche" ? "bg-destructive text-destructive-foreground" : "bg-primary text-primary-foreground") : "bg-muted-foreground/30 text-background"
                   }`}>{i + 1}</div>
                   <span className={`flex-1 text-[13px] ${i === 0 ? "font-semibold" : ""}`}>{l.name}</span>
                   <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${

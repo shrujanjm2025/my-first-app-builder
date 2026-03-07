@@ -5,10 +5,23 @@ import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { Wallet, Check } from "lucide-react";
 
+const CURRENCIES = [
+  { code: "INR", symbol: "₹", label: "Indian Rupee" },
+  { code: "USD", symbol: "$", label: "US Dollar" },
+  { code: "EUR", symbol: "€", label: "Euro" },
+  { code: "GBP", symbol: "£", label: "British Pound" },
+  { code: "AUD", symbol: "A$", label: "Australian Dollar" },
+  { code: "CAD", symbol: "C$", label: "Canadian Dollar" },
+  { code: "SGD", symbol: "S$", label: "Singapore Dollar" },
+  { code: "AED", symbol: "د.إ", label: "UAE Dirham" },
+  { code: "JPY", symbol: "¥", label: "Japanese Yen" },
+];
+
 const QUESTIONS = [
   { q: "What is your full name?", sub: "We'll personalize your dashboard with this.", key: "name", type: "text" as const, placeholder: "e.g. Arjun Sharma" },
   { q: "What is your email address?", sub: "For alerts, login and secure notifications.", key: "email", type: "email" as const, placeholder: "arjun@example.com" },
-  { q: "What is your monthly salary after taxes?", sub: "Optional — used to set up your 50/30/20 budget.", key: "salary", type: "number" as const, placeholder: "₹85,000", hint: "In INR" },
+  { q: "What is your preferred currency?", sub: "Used across all pages for consistent formatting.", key: "currency", type: "currency" as const },
+  { q: "What is your monthly salary after taxes?", sub: "Optional — used to set up your 50/30/20 budget.", key: "salary", type: "number" as const, placeholder: "e.g. 85000", hint: "In your selected currency" },
   { q: "Any other income sources or assets?", sub: "Freelance, rental income, investments, FDs/RDs.", key: "otherIncome", type: "textarea" as const, placeholder: "e.g. Freelance ₹10,000/mo, Rental ₹22,000/mo" },
   { q: "What types of loans do you have?", sub: "Select all that apply. You can add details later.", key: "loans", type: "checkboxes" as const, options: ["Home Loan", "Personal Loan", "Car Loan", "Credit Card Debt", "Education Loan", "Other"] },
   { q: "Do you have any insurance policies?", sub: "We'll set renewal alerts and budget for premiums.", key: "insurance", type: "checkboxes" as const, options: ["Health Insurance", "Life Insurance", "Home Insurance", "Car Insurance", "Other"] },
@@ -22,7 +35,7 @@ export default function Onboarding() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
-  const [data, setData] = useState<Record<string, any>>({ loans: [], insurance: [], deposits: [], creditScore: 650 });
+  const [data, setData] = useState<Record<string, any>>({ loans: [], insurance: [], deposits: [], creditScore: 650, currency: "INR" });
   const [loading, setLoading] = useState(false);
 
   const q = QUESTIONS[step];
@@ -43,6 +56,7 @@ export default function Onboarding() {
       monthly_salary: parseFloat(data.salary) || 0,
       dependents: parseInt(data.dependents) || 0,
       credit_score: data.creditScore || 650,
+      currency: data.currency || "INR",
       onboarding_completed: true,
     }).eq("id", user.id);
 
@@ -84,6 +98,24 @@ export default function Onboarding() {
               <input type={q.type} placeholder={q.placeholder} value={data[q.key] || ""} onChange={e => setData(p => ({ ...p, [q.key]: e.target.value }))} autoFocus
                 className="w-full bg-background/50 border border-border rounded-xl px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/40 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all" />
               {q.hint && <p className="text-[11px] text-muted-foreground/50 mt-1.5">{q.hint}</p>}
+            </div>
+          )}
+
+          {q.type === "currency" && (
+            <div className="grid grid-cols-3 gap-2">
+              {CURRENCIES.map(c => {
+                const selected = data.currency === c.code;
+                return (
+                  <div key={c.code} onClick={() => setData(p => ({ ...p, currency: c.code }))}
+                    className={`flex flex-col items-center gap-1 p-3 rounded-xl cursor-pointer border transition-all ${
+                      selected ? "border-primary/40 bg-primary/10" : "border-border bg-background/30"
+                    }`}>
+                    <span className="text-lg font-mono font-bold">{c.symbol}</span>
+                    <span className={`text-[12px] font-medium ${selected ? "text-primary" : "text-muted-foreground"}`}>{c.code}</span>
+                    <span className="text-[10px] text-muted-foreground/60">{c.label}</span>
+                  </div>
+                );
+              })}
             </div>
           )}
 

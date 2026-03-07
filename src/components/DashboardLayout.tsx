@@ -4,8 +4,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Wallet, PiggyBank, Target, CreditCard, Shield,
-  Calculator, Settings, LogOut, Menu, ChevronLeft, Building2, Landmark,
-  Moon, Sun, BarChart3, Home, Clock
+  Settings, LogOut, Menu, ChevronLeft, Building2, Landmark,
+  Moon, Sun, BarChart3, Clock
 } from "lucide-react";
 
 const navItems = [
@@ -18,8 +18,6 @@ const navItems = [
   { to: "/retirement", label: "Retirement", icon: Clock },
   { to: "/deposits", label: "FD & RD", icon: Landmark },
   { to: "/bank-accounts", label: "Bank Accounts", icon: Building2 },
-  { to: "/transactions", label: "Transactions", icon: PiggyBank },
-  { to: "/calculators", label: "Calculators", icon: Calculator },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 

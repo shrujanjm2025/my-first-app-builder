@@ -329,6 +329,63 @@ export type Database = {
         }
         Relationships: []
       }
+      users_financial_profile: {
+        Row: {
+          created_at: string | null
+          credit_score: number | null
+          currency: string | null
+          dependents: number | null
+          email: string | null
+          fds_rds: Json | null
+          financial_goals: string | null
+          full_name: string | null
+          id: string
+          insurance: Json | null
+          loans: Json | null
+          monthly_salary: number | null
+          onboarding_complete: boolean | null
+          onboarding_step: number | null
+          other_income: Json | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          credit_score?: number | null
+          currency?: string | null
+          dependents?: number | null
+          email?: string | null
+          fds_rds?: Json | null
+          financial_goals?: string | null
+          full_name?: string | null
+          id: string
+          insurance?: Json | null
+          loans?: Json | null
+          monthly_salary?: number | null
+          onboarding_complete?: boolean | null
+          onboarding_step?: number | null
+          other_income?: Json | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          credit_score?: number | null
+          currency?: string | null
+          dependents?: number | null
+          email?: string | null
+          fds_rds?: Json | null
+          financial_goals?: string | null
+          full_name?: string | null
+          id?: string
+          insurance?: Json | null
+          loans?: Json | null
+          monthly_salary?: number | null
+          onboarding_complete?: boolean | null
+          onboarding_step?: number | null
+          other_income?: Json | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

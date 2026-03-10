@@ -54,10 +54,10 @@ export default function SettingsPage() {
         setMonthlySalary(data.monthly_salary ? String(data.monthly_salary) : "");
         setDependents(data.dependents || 0);
         setCreditScore(data.credit_score || 650);
-        setOtherIncome((data.other_income as IncomeSource[]) || []);
-        setLoans((data.loans as LoanEntry[]) || []);
-        setInsurance((data.insurance as InsuranceEntry[]) || []);
-        setFdsRds((data.fds_rds as FdRdEntry[]) || []);
+        setOtherIncome((data.other_income as unknown as IncomeSource[]) || []);
+        setLoans((data.loans as unknown as LoanEntry[]) || []);
+        setInsurance((data.insurance as unknown as InsuranceEntry[]) || []);
+        setFdsRds((data.fds_rds as unknown as FdRdEntry[]) || []);
         setFinancialGoals(data.financial_goals || "");
       }
     });

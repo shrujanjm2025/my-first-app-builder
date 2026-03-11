@@ -1,22 +1,27 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useNavigate } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { Wallet, TrendingUp, Star, Shield, Bell, Check, Info, AlertTriangle } from "lucide-react";
 
-const fmtK = (n: number) => n >= 100000 ? `₹${(n / 100000).toFixed(1)}L` : n >= 1000 ? `₹${(n / 1000).toFixed(0)}K` : `₹${n}`;
-const pct = (a: number, b: number) => b === 0 ? 0 : Math.round((a / b) * 100);
+const CURRENCIES: Record<string, string> = { INR: "₹", USD: "$", EUR: "€", GBP: "£", AUD: "A$", CAD: "C$", SGD: "S$", AED: "د.إ", JPY: "¥" };
 
+const pct = (a: number, b: number) => b === 0 ? 0 : Math.round((a / b) * 100);
 const DONUT_COLORS = ["hsl(217, 94%, 68%)", "hsl(270, 95%, 75%)", "hsl(166, 100%, 45%)"];
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const [sym, setSym] = useState("₹");
   const [stats, setStats] = useState({ income: 0, expenses: 0, loans: 0, goals: 0, emergencyFund: 0, monthlySalary: 0, creditScore: 0, fullName: "" });
   const [chartData, setChartData] = useState<any[]>([]);
   const [expenseByCategory, setExpenseByCategory] = useState<any[]>([]);
   const [alerts, setAlerts] = useState<{ type: string; msg: string }[]>([]);
   const [goalsList, setGoalsList] = useState<any[]>([]);
+
+  const fmtK = (n: number) => n >= 100000 ? `${sym}${(n / 100000).toFixed(1)}L` : n >= 1000 ? `${sym}${(n / 1000).toFixed(0)}K` : `${sym}${n}`;
 
   useEffect(() => {
     if (!user) return;
@@ -24,38 +29,48 @@ export default function Dashboard() {
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
 
-      const [txRes, loanRes, goalRes, profileRes, insuranceRes, budgetRes] = await Promise.all([
+      // Pull from users_financial_profile (primary) instead of profiles
+      const [txRes, loanRes, goalRes, fpRes, insuranceRes, budgetRes] = await Promise.all([
         supabase.from("transactions").select("type, amount, date, category").eq("user_id", user.id).gte("date", startOfMonth),
         supabase.from("loans").select("outstanding_balance, name, start_date, tenure_months, emi, interest_rate").eq("user_id", user.id),
         supabase.from("goals").select("*").eq("user_id", user.id),
-        supabase.from("profiles").select("monthly_salary, dependents, credit_score, full_name").eq("id", user.id).single(),
+        supabase.from("users_financial_profile").select("*").eq("id", user.id).single(),
         supabase.from("insurance_policies").select("name, renewal_date").eq("user_id", user.id),
         supabase.from("budgets").select("category, allocated_amount").eq("user_id", user.id).eq("month", startOfMonth),
       ]);
+
+      const fp = fpRes.data;
+
+      // Redirect to onboarding if not complete
+      if (fp && !fp.onboarding_complete) {
+        navigate("/onboarding");
+        return;
+      }
+
+      const currency = fp?.currency || "INR";
+      setSym(CURRENCIES[currency] || "₹");
 
       const txs = txRes.data || [];
       const income = txs.filter(t => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
       const expenses = txs.filter(t => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
       const loans = (loanRes.data || []).reduce((s, l) => s + Number(l.outstanding_balance), 0);
-      const monthlySalary = Number(profileRes.data?.monthly_salary) || 0;
+      const monthlySalary = Number(fp?.monthly_salary) || 0;
       const needsMonthly = monthlySalary * 0.5;
       const emergencyFund = needsMonthly * 6;
-      const creditScore = Number(profileRes.data?.credit_score) || 0;
-      const fullName = profileRes.data?.full_name || "";
+      const creditScore = Number(fp?.credit_score) || 0;
+      const fullName = fp?.full_name || "";
 
       setStats({ income, expenses, loans, goals: (goalRes.data || []).length, emergencyFund, monthlySalary, creditScore, fullName });
       setGoalsList((goalRes.data || []).slice(0, 4));
 
-      // Donut: 50/30/20 budget allocation
       if (monthlySalary > 0) {
         setExpenseByCategory([
-          { name: "Needs", value: monthlySalary * 0.5, color: "hsl(217, 94%, 68%)" },
-          { name: "Wants", value: monthlySalary * 0.3, color: "hsl(270, 95%, 75%)" },
-          { name: "Savings", value: monthlySalary * 0.2, color: "hsl(166, 100%, 45%)" },
+          { name: "Needs", value: monthlySalary * 0.5, color: DONUT_COLORS[0] },
+          { name: "Wants", value: monthlySalary * 0.3, color: DONUT_COLORS[1] },
+          { name: "Savings", value: monthlySalary * 0.2, color: DONUT_COLORS[2] },
         ]);
       }
 
-      // Alerts
       const newAlerts: { type: string; msg: string }[] = [];
       const budgets = budgetRes.data || [];
       const catMap: Record<string, number> = {};
@@ -64,7 +79,7 @@ export default function Dashboard() {
       budgets.forEach((b: any) => {
         const spent = catMap[b.category] || 0;
         if (spent > Number(b.allocated_amount)) {
-          newAlerts.push({ type: "y", msg: `Wants budget exceeded by ₹${(spent - Number(b.allocated_amount)).toFixed(0)} on ${b.category}` });
+          newAlerts.push({ type: "y", msg: `Wants budget exceeded by ${CURRENCIES[currency]}${(spent - Number(b.allocated_amount)).toFixed(0)} on ${b.category}` });
         }
       });
 
@@ -83,7 +98,6 @@ export default function Dashboard() {
 
       setAlerts(newAlerts);
 
-      // Last 6 months chart
       const last6 = Array.from({ length: 6 }, (_, i) => {
         const d = new Date();
         d.setMonth(d.getMonth() - (5 - i));
@@ -96,7 +110,7 @@ export default function Dashboard() {
       setChartData(last6);
     };
     fetchStats();
-  }, [user]);
+  }, [user, navigate]);
 
   const savings = stats.income - stats.expenses;
   const savingsRate = stats.income > 0 ? ((savings / stats.income) * 100).toFixed(1) : "0";
@@ -119,7 +133,6 @@ export default function Dashboard() {
   return (
     <DashboardLayout>
       <div className="animate-fadeUp space-y-5">
-        {/* Header */}
         <div className="flex justify-between items-center">
           <div>
             <h1 className="font-heading text-[26px] font-extrabold">
@@ -131,7 +144,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Stat Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
           {statCards.map((c, i) => {
             const Icon = c.icon;
@@ -151,9 +163,7 @@ export default function Dashboard() {
           })}
         </div>
 
-        {/* Charts Row */}
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.6fr] gap-4">
-          {/* Donut Chart */}
           <div className="bg-card border border-border rounded-2xl p-5">
             <h3 className="font-heading text-sm font-bold mb-1">Budget Allocation</h3>
             <p className="text-xs text-muted-foreground mb-4">50/30/20 rule</p>
@@ -186,7 +196,6 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* Area Chart */}
           <div className="bg-card border border-border rounded-2xl p-5">
             <h3 className="font-heading text-sm font-bold mb-1">Income vs Expenses</h3>
             <p className="text-xs text-muted-foreground mb-4">6-month trend</p>
@@ -219,9 +228,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Goals + Alerts */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Goals */}
           <div className="bg-card border border-border rounded-2xl p-5">
             <h3 className="font-heading text-sm font-bold mb-4">SMART Goals</h3>
             {goalsList.length > 0 ? goalsList.map((g, i) => {
@@ -249,7 +256,6 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* Alerts */}
           <div className="bg-card border border-border rounded-2xl p-5">
             <h3 className="font-heading text-sm font-bold mb-4 flex items-center gap-2">
               <Bell className="h-4 w-4 text-[hsl(var(--warning))]" /> Smart Alerts

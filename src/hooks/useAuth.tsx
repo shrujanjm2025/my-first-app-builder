@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 
 interface AuthContextType {
   session: Session | null;
@@ -53,14 +53,37 @@ export const useAuth = () => useContext(AuthContext);
 export function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [checkingOnboarding, setCheckingOnboarding] = useState(true);
 
   useEffect(() => {
     if (!loading && !user) {
       navigate("/auth");
+      return;
     }
-  }, [user, loading, navigate]);
 
-  if (loading) {
+    if (!loading && user && location.pathname !== "/onboarding") {
+      // Check if onboarding is complete
+      supabase
+        .from("users_financial_profile")
+        .select("onboarding_complete")
+        .eq("id", user.id)
+        .single()
+        .then(({ data }) => {
+          if (data && !data.onboarding_complete) {
+            navigate("/onboarding");
+          }
+          setCheckingOnboarding(false);
+        })
+        .catch(() => {
+          setCheckingOnboarding(false);
+        });
+    } else {
+      setCheckingOnboarding(false);
+    }
+  }, [user, loading, navigate, location.pathname]);
+
+  if (loading || checkingOnboarding) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />

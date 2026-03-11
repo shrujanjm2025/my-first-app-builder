@@ -3,7 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import { Wallet, Check, Plus, Minus, ChevronRight, ChevronLeft, Sparkles, ArrowRight, X } from "lucide-react";
+import {
+  Wallet, Check, Plus, Minus, ChevronRight, ChevronLeft,
+  Sparkles, ArrowRight, X, Target, User, Mail, Banknote,
+  Briefcase, CreditCard, Shield, BarChart3, Landmark, Users, Zap
+} from "lucide-react";
 
 /* ───────── constants ───────── */
 const CURRENCIES = [
@@ -23,6 +27,20 @@ const LOAN_TYPES = ["Home Loan", "Personal Loan", "Car Loan", "Credit Card Debt"
 const INSURANCE_TYPES = ["Health Insurance", "Life Insurance", "Home Insurance", "Car Insurance", "Other"];
 
 const TOTAL_STEPS = 11; // 10 questions + 1 summary
+
+/* ───────── Step metadata from Knowledge Base ───────── */
+const STEP_META: { icon: any; feature: string }[] = [
+  { icon: Target, feature: "Gamifies your experience & anchors your financial roadmap" },
+  { icon: User, feature: "Personalizes dashboards, greetings & notifications" },
+  { icon: Banknote, feature: "Baseline for 50/30/20 rule & emergency fund calculation" },
+  { icon: Briefcase, feature: "Includes rental income & FDs into total cash flow" },
+  { icon: CreditCard, feature: "Triggers Snowball/Avalanche & Offset Account strategies" },
+  { icon: Shield, feature: "Enables overdue alerts & renewal reminders" },
+  { icon: BarChart3, feature: "Baseline for CC utilization & loan refinance tips" },
+  { icon: Landmark, feature: "Compound interest tracking & retirement planning" },
+  { icon: Users, feature: "Calibrates Grocery & Need budget categories" },
+  { icon: Zap, feature: "Sets your preferred display currency across all pages" },
+];
 
 /* ───────── types ───────── */
 interface IncomeSource { type: string; amount: string; }
@@ -64,6 +82,21 @@ const getScoreLabel = (s: number) => s >= 750 ? "Excellent" : s >= 650 ? "Good" 
 const getScoreBg = (s: number) => s >= 750 ? "bg-primary/10 text-primary" : s >= 650 ? "bg-[hsl(var(--warning))]/10 text-[hsl(var(--warning))]" : "bg-destructive/10 text-destructive";
 const getCurrencySymbol = (code: string) => CURRENCIES.find(c => c.code === code)?.symbol || "₹";
 
+/*
+  NEW ORDER per Knowledge Base (SMART Goals = "The Hook", first required step):
+  Step 0: SMART Goals (required — the emotional Aha!)
+  Step 1: Full Name
+  Step 2: Monthly Salary
+  Step 3: Other Income
+  Step 4: Loans
+  Step 5: Insurance
+  Step 6: Credit Score
+  Step 7: FDs / RDs
+  Step 8: Dependents
+  Step 9: Currency
+  Step 10: Summary
+*/
+
 export default function Onboarding() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -103,7 +136,6 @@ export default function Onboarding() {
         });
         setStep(profile.onboarding_step || 0);
       } else {
-        // Create profile if missing (for existing users)
         await supabase.from("users_financial_profile").insert({
           id: user.id,
           email: user.email || "",
@@ -137,6 +169,11 @@ export default function Onboarding() {
   }, [user, data]);
 
   const goNext = async () => {
+    // Step 0 (SMART Goals) is required
+    if (step === 0 && !data.financial_goals.trim()) {
+      toast.error("Set at least one SMART goal to continue — it's the anchor of your financial journey!");
+      return;
+    }
     const nextStep = step + 1;
     setDirection("next");
     await autoSave(nextStep);
@@ -153,7 +190,6 @@ export default function Onboarding() {
   const handleFinish = async () => {
     if (!user) return;
     setLoading(true);
-    // Save to financial profile
     await supabase.from("users_financial_profile").update({
       full_name: data.full_name,
       email: data.email,
@@ -171,7 +207,6 @@ export default function Onboarding() {
       updated_at: new Date().toISOString(),
     }).eq("id", user.id);
 
-    // Also update legacy profiles table
     await supabase.from("profiles").update({
       full_name: data.full_name,
       monthly_salary: parseFloat(data.monthly_salary) || 0,
@@ -190,45 +225,36 @@ export default function Onboarding() {
     setData(prev => ({ ...prev, [key]: value }));
   };
 
-  // Toggle item in checkbox arrays
   const toggleLoan = (type: string) => {
     const exists = data.loans.find(l => l.type === type);
     if (exists) update("loans", data.loans.filter(l => l.type !== type));
     else update("loans", [...data.loans, { type, amount: "", interestRate: "", emi: "" }]);
   };
-
   const updateLoan = (type: string, field: keyof LoanEntry, value: string) => {
     update("loans", data.loans.map(l => l.type === type ? { ...l, [field]: value } : l));
   };
-
   const toggleInsurance = (type: string) => {
     const exists = data.insurance.find(i => i.type === type);
     if (exists) update("insurance", data.insurance.filter(i => i.type !== type));
     else update("insurance", [...data.insurance, { type, premium: "", renewalDate: "" }]);
   };
-
   const updateInsurance = (type: string, field: keyof InsuranceEntry, value: string) => {
     update("insurance", data.insurance.map(i => i.type === type ? { ...i, [field]: value } : i));
   };
-
   const toggleIncome = (type: string) => {
     const exists = data.other_income.find(i => i.type === type);
     if (exists) update("other_income", data.other_income.filter(i => i.type !== type));
     else update("other_income", [...data.other_income, { type, amount: "" }]);
   };
-
   const updateIncome = (type: string, amount: string) => {
     update("other_income", data.other_income.map(i => i.type === type ? { ...i, amount } : i));
   };
-
   const addFdRd = () => {
     update("fds_rds", [...data.fds_rds, { bank: "", amount: "", interestRate: "", maturityDate: "" }]);
   };
-
   const removeFdRd = (idx: number) => {
     update("fds_rds", data.fds_rds.filter((_, i) => i !== idx));
   };
-
   const updateFdRd = (idx: number, field: keyof FdRdEntry, value: string) => {
     update("fds_rds", data.fds_rds.map((f, i) => i === idx ? { ...f, [field]: value } : f));
   };
@@ -271,81 +297,54 @@ export default function Onboarding() {
 
       {/* Main content */}
       <div className="flex-1 flex items-center justify-center px-5 py-8">
-        <div
-          key={step}
-          className={`w-full max-w-[580px] ${direction === "next" ? "animate-fadeUp" : "animate-fadeUp"}`}
-        >
-          {/* ───── STEP 0: Full Name ───── */}
+        <div key={step} className={`w-full max-w-[580px] animate-fadeUp`}>
+
+          {/* ───── STEP 0: SMART Goals (THE HOOK — Required) ───── */}
           {step === 0 && (
             <StepCard
               stepNum={1}
-              question="What is your full name?"
-              helper="We'll personalize your financial dashboard."
+              question="What are your financial goals?"
+              helper="Make them SMART — Specific, Measurable, Achievable, Relevant, Time-bound. This is the anchor of your entire financial roadmap."
+              featureIcon={STEP_META[0].icon}
+              featureTieIn={STEP_META[0].feature}
             >
-              <StepInput
-                type="text"
-                placeholder="e.g. Arjun Sharma"
-                value={data.full_name}
-                onChange={v => update("full_name", v)}
+              <textarea
+                rows={6}
+                placeholder={`e.g.\n• Save ${sym}5,000 for emergency fund by next month\n• Pay off ${sym}2,000 credit card debt\n• Start ${sym}3,000 RD for vacation\n• Invest ${sym}10,000 in mutual funds`}
+                value={data.financial_goals}
+                onChange={e => update("financial_goals", e.target.value)}
                 autoFocus
+                className="w-full bg-background/50 border-2 border-border rounded-xl px-4 py-3.5 text-sm text-foreground placeholder:text-muted-foreground/30 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all resize-y min-h-[160px] leading-relaxed"
               />
+              <p className="text-xs text-primary/80 mt-3 flex items-center gap-1.5">
+                <Sparkles className="h-3 w-3" /> This step is required — goals gamify your WealthOS experience.
+              </p>
             </StepCard>
           )}
 
-          {/* ───── STEP 1: Email ───── */}
+          {/* ───── STEP 1: Full Name ───── */}
           {step === 1 && (
             <StepCard
               stepNum={2}
-              question="What is your email address?"
-              helper="We use this for secure login and alerts."
+              question="What is your full name?"
+              helper="We'll personalize your financial dashboard and notifications."
+              optional
+              featureIcon={STEP_META[1].icon}
+              featureTieIn={STEP_META[1].feature}
             >
-              <StepInput
-                type="email"
-                placeholder="arjun@example.com"
-                value={data.email}
-                onChange={v => update("email", v)}
-                autoFocus
-              />
+              <StepInput type="text" placeholder="e.g. Arjun Sharma" value={data.full_name} onChange={v => update("full_name", v)} autoFocus />
             </StepCard>
           )}
 
-          {/* ───── STEP 2: Currency ───── */}
+          {/* ───── STEP 2: Monthly Salary ───── */}
           {step === 2 && (
             <StepCard
               stepNum={3}
-              question="What is your preferred currency?"
-              helper="Used across all pages for consistent formatting."
-            >
-              <div className="grid grid-cols-3 gap-2.5">
-                {CURRENCIES.map(c => {
-                  const selected = data.currency === c.code;
-                  return (
-                    <button
-                      key={c.code}
-                      onClick={() => update("currency", c.code)}
-                      className={`flex flex-col items-center gap-1.5 p-4 rounded-xl border-2 transition-all duration-200 ${
-                        selected
-                          ? "border-primary bg-primary/5 shadow-[0_0_0_1px_hsl(var(--primary)/0.2)]"
-                          : "border-border bg-card hover:border-muted-foreground/30"
-                      }`}
-                    >
-                      <span className="text-2xl font-mono font-bold">{c.symbol}</span>
-                      <span className={`text-xs font-semibold ${selected ? "text-primary" : "text-muted-foreground"}`}>{c.code}</span>
-                      <span className="text-[10px] text-muted-foreground/60">{c.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </StepCard>
-          )}
-
-          {/* ───── STEP 3: Monthly Salary ───── */}
-          {step === 3 && (
-            <StepCard
-              stepNum={4}
               question="What is your monthly salary after taxes?"
               helper="This helps us automatically create your 50/30/20 budget."
               optional
+              featureIcon={STEP_META[2].icon}
+              featureTieIn={STEP_META[2].feature}
             >
               <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-mono text-lg">{sym}</span>
@@ -379,13 +378,15 @@ export default function Onboarding() {
             </StepCard>
           )}
 
-          {/* ───── STEP 4: Other Income ───── */}
-          {step === 4 && (
+          {/* ───── STEP 3: Other Income ───── */}
+          {step === 3 && (
             <StepCard
-              stepNum={5}
+              stepNum={4}
               question="Do you have any other income sources or assets?"
               helper="Freelance, rental income, investments, side business."
               optional
+              featureIcon={STEP_META[3].icon}
+              featureTieIn={STEP_META[3].feature}
             >
               <div className="space-y-2">
                 {INCOME_SOURCES.map(src => {
@@ -426,13 +427,15 @@ export default function Onboarding() {
             </StepCard>
           )}
 
-          {/* ───── STEP 5: Loans ───── */}
-          {step === 5 && (
+          {/* ───── STEP 4: Loans ───── */}
+          {step === 4 && (
             <StepCard
-              stepNum={6}
+              stepNum={5}
               question="What types of loans do you have?"
               helper="Select all that apply. Add amounts, interest rates, and EMIs."
               optional
+              featureIcon={STEP_META[4].icon}
+              featureTieIn={STEP_META[4].feature}
             >
               <div className="space-y-2">
                 {LOAN_TYPES.map(type => {
@@ -460,11 +463,9 @@ export default function Onboarding() {
                               onChange={e => updateLoan(type, "amount", e.target.value)}
                               className="w-full bg-background border border-border rounded-lg pl-7 pr-2 py-2 text-xs font-mono focus:border-primary outline-none" />
                           </div>
-                          <div className="relative">
-                            <input type="number" placeholder="Rate %" value={selected.interestRate}
-                              onChange={e => updateLoan(type, "interestRate", e.target.value)}
-                              className="w-full bg-background border border-border rounded-lg px-2 py-2 text-xs font-mono focus:border-primary outline-none" />
-                          </div>
+                          <input type="number" placeholder="Rate %" value={selected.interestRate}
+                            onChange={e => updateLoan(type, "interestRate", e.target.value)}
+                            className="w-full bg-background border border-border rounded-lg px-2 py-2 text-xs font-mono focus:border-primary outline-none" />
                           <div className="relative">
                             <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground font-mono text-[11px]">{sym}</span>
                             <input type="number" placeholder="EMI" value={selected.emi}
@@ -480,13 +481,15 @@ export default function Onboarding() {
             </StepCard>
           )}
 
-          {/* ───── STEP 6: Insurance ───── */}
-          {step === 6 && (
+          {/* ───── STEP 5: Insurance ───── */}
+          {step === 5 && (
             <StepCard
-              stepNum={7}
+              stepNum={6}
               question="Do you have any insurance policies?"
               helper="We'll set renewal alerts and budget for premiums."
               optional
+              featureIcon={STEP_META[5].icon}
+              featureTieIn={STEP_META[5].feature}
             >
               <div className="space-y-2">
                 {INSURANCE_TYPES.map(type => {
@@ -526,13 +529,15 @@ export default function Onboarding() {
             </StepCard>
           )}
 
-          {/* ───── STEP 7: Credit Score ───── */}
-          {step === 7 && (
+          {/* ───── STEP 6: Credit Score ───── */}
+          {step === 6 && (
             <StepCard
-              stepNum={8}
+              stepNum={7}
               question="What is your approximate credit score?"
               helper="We'll simulate ways to improve it."
               optional
+              featureIcon={STEP_META[6].icon}
+              featureTieIn={STEP_META[6].feature}
             >
               <div className="text-center mb-6">
                 <span className={`font-mono text-[56px] font-bold leading-none ${getScoreColor(data.credit_score)}`}>
@@ -573,13 +578,15 @@ export default function Onboarding() {
             </StepCard>
           )}
 
-          {/* ───── STEP 8: FDs / RDs ───── */}
-          {step === 8 && (
+          {/* ───── STEP 7: FDs / RDs ───── */}
+          {step === 7 && (
             <StepCard
-              stepNum={9}
+              stepNum={8}
               question="Do you have any Fixed Deposits or Recurring Deposits?"
               helper="We'll track maturity, interest, and compound growth."
               optional
+              featureIcon={STEP_META[7].icon}
+              featureTieIn={STEP_META[7].feature}
             >
               <div className="space-y-3">
                 {data.fds_rds.map((entry, idx) => (
@@ -615,13 +622,15 @@ export default function Onboarding() {
             </StepCard>
           )}
 
-          {/* ───── STEP 9: Dependents ───── */}
-          {step === 9 && (
+          {/* ───── STEP 8: Dependents ───── */}
+          {step === 8 && (
             <StepCard
-              stepNum={10}
+              stepNum={9}
               question="How many dependents do you have?"
-              helper="This helps us calculate your emergency fund and adjust allocations."
+              helper="This helps us calculate your emergency fund and adjust budget allocations."
               optional
+              featureIcon={STEP_META[8].icon}
+              featureTieIn={STEP_META[8].feature}
             >
               <div className="flex items-center justify-center gap-6 py-6">
                 <button
@@ -652,20 +661,36 @@ export default function Onboarding() {
             </StepCard>
           )}
 
-          {/* ───── STEP 10: Financial Goals ───── */}
-          {step === 10 && (
+          {/* ───── STEP 9: Currency ───── */}
+          {step === 9 && (
             <StepCard
-              stepNum={11}
-              question="What are your financial goals for the next month?"
-              helper="Make them SMART — Specific, Measurable, Achievable, Relevant, Time-bound."
+              stepNum={10}
+              question="What is your preferred currency?"
+              helper="Used across all pages for consistent formatting. You can change this later in Settings."
+              optional
+              featureIcon={STEP_META[9].icon}
+              featureTieIn={STEP_META[9].feature}
             >
-              <textarea
-                rows={6}
-                placeholder={`e.g.\n• Save ${sym}5,000 for emergency fund by next month\n• Pay off ${sym}2,000 credit card debt\n• Start ${sym}3,000 RD for vacation\n• Invest ${sym}10,000 in mutual funds`}
-                value={data.financial_goals}
-                onChange={e => update("financial_goals", e.target.value)}
-                className="w-full bg-card border-2 border-border rounded-xl px-4 py-3.5 text-sm text-foreground placeholder:text-muted-foreground/30 focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none transition-all resize-y min-h-[160px] leading-relaxed"
-              />
+              <div className="grid grid-cols-3 gap-2.5">
+                {CURRENCIES.map(c => {
+                  const selected = data.currency === c.code;
+                  return (
+                    <button
+                      key={c.code}
+                      onClick={() => update("currency", c.code)}
+                      className={`flex flex-col items-center gap-1.5 p-4 rounded-xl border-2 transition-all duration-200 ${
+                        selected
+                          ? "border-primary bg-primary/5 shadow-[0_0_0_1px_hsl(var(--primary)/0.2)]"
+                          : "border-border bg-card hover:border-muted-foreground/30"
+                      }`}
+                    >
+                      <span className="text-2xl font-mono font-bold">{c.symbol}</span>
+                      <span className={`text-xs font-semibold ${selected ? "text-primary" : "text-muted-foreground"}`}>{c.code}</span>
+                      <span className="text-[10px] text-muted-foreground/60">{c.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </StepCard>
           )}
 
@@ -681,8 +706,8 @@ export default function Onboarding() {
               </div>
 
               <div className="bg-card border border-border rounded-2xl divide-y divide-border overflow-hidden">
+                <SummaryRow label="🎯 SMART Goals" value={data.financial_goals ? "Set ✓" : "Not set"} highlight />
                 <SummaryRow label="Name" value={data.full_name || "—"} />
-                <SummaryRow label="Email" value={data.email || "—"} />
                 <SummaryRow label="Currency" value={data.currency} />
                 <SummaryRow label="Monthly Salary" value={data.monthly_salary ? `${sym}${parseFloat(data.monthly_salary).toLocaleString()}` : "Not set"} />
                 <SummaryRow label="Other Income" value={data.other_income.length > 0 ? data.other_income.map(i => i.type).join(", ") : "None"} />
@@ -691,7 +716,6 @@ export default function Onboarding() {
                 <SummaryRow label="Credit Score" value={`${data.credit_score} — ${getScoreLabel(data.credit_score)}`} />
                 <SummaryRow label="FDs / RDs" value={data.fds_rds.length > 0 ? `${data.fds_rds.length} entries` : "None"} />
                 <SummaryRow label="Dependents" value={String(data.dependents)} />
-                <SummaryRow label="Goals" value={data.financial_goals ? "Set ✓" : "Not set"} />
               </div>
 
               <button
@@ -730,7 +754,8 @@ export default function Onboarding() {
                   )}
                 </button>
               </div>
-              {step < TOTAL_STEPS - 2 && (
+              {/* Only show skip for optional steps (step > 0) */}
+              {step > 0 && step < TOTAL_STEPS - 2 && (
                 <p className="text-center text-xs text-muted-foreground/50 cursor-pointer hover:text-muted-foreground transition-colors"
                   onClick={goNext}>
                   Skip this question
@@ -754,8 +779,9 @@ export default function Onboarding() {
 }
 
 /* ───────── Shared sub-components ───────── */
-function StepCard({ stepNum, question, helper, optional, children }: {
+function StepCard({ stepNum, question, helper, optional, children, featureIcon: FeatureIcon, featureTieIn }: {
   stepNum: number; question: string; helper: string; optional?: boolean; children: React.ReactNode;
+  featureIcon?: any; featureTieIn?: string;
 }) {
   return (
     <div>
@@ -769,6 +795,11 @@ function StepCard({ stepNum, question, helper, optional, children }: {
               Optional
             </span>
           )}
+          {!optional && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-primary/20 text-primary">
+              Required
+            </span>
+          )}
         </div>
         <h2 className="font-heading text-xl md:text-2xl font-extrabold leading-tight mb-2">{question}</h2>
         <p className="text-sm text-muted-foreground">{helper}</p>
@@ -776,6 +807,16 @@ function StepCard({ stepNum, question, helper, optional, children }: {
       <div className="bg-card border border-border rounded-2xl p-6 md:p-8">
         {children}
       </div>
+      {/* Feature Tie-In Badge */}
+      {featureTieIn && FeatureIcon && (
+        <div className="mt-4 flex items-start gap-2.5 bg-secondary/50 border border-border rounded-xl px-4 py-3">
+          <FeatureIcon className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
+          <div>
+            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Unlocks Feature</span>
+            <p className="text-xs text-muted-foreground mt-0.5">{featureTieIn}</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -795,11 +836,11 @@ function StepInput({ type, placeholder, value, onChange, autoFocus }: {
   );
 }
 
-function SummaryRow({ label, value }: { label: string; value: string }) {
+function SummaryRow({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
-    <div className="flex items-center justify-between px-5 py-3.5">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <span className="text-sm font-medium text-foreground max-w-[60%] text-right truncate">{value}</span>
+    <div className={`flex items-center justify-between px-5 py-3.5 ${highlight ? "bg-primary/5" : ""}`}>
+      <span className={`text-sm ${highlight ? "text-primary font-semibold" : "text-muted-foreground"}`}>{label}</span>
+      <span className={`text-sm font-medium max-w-[60%] text-right truncate ${highlight ? "text-primary" : "text-foreground"}`}>{value}</span>
     </div>
   );
 }

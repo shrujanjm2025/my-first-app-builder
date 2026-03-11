@@ -69,13 +69,10 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
         .select("onboarding_complete")
         .eq("id", user.id)
         .single()
-        .then(({ data }) => {
-          if (data && !data.onboarding_complete) {
+        .then(({ data, error }) => {
+          if (!error && data && !data.onboarding_complete) {
             navigate("/onboarding");
           }
-          setCheckingOnboarding(false);
-        })
-        .catch(() => {
           setCheckingOnboarding(false);
         });
     } else {

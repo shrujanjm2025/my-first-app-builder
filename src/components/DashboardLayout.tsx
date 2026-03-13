@@ -5,11 +5,13 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Wallet, PiggyBank, Target, CreditCard, Shield,
   Settings, LogOut, Menu, ChevronLeft, Building2, Landmark,
-  Moon, Sun, BarChart3, Clock
+  Moon, Sun, BarChart3, Clock, SwapVertical, Trophy, Lock
 } from "lucide-react";
 
 const navItems = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/transactions", label: "Transactions", icon: SwapVertical },
+  { to: "/gamification", label: "Progress", icon: Trophy },
   { to: "/budgets", label: "Budget Manager", icon: Wallet },
   { to: "/loans", label: "Loans & Debt", icon: CreditCard },
   { to: "/insurance", label: "Insurance", icon: Shield },
@@ -18,6 +20,7 @@ const navItems = [
   { to: "/retirement", label: "Retirement", icon: Clock },
   { to: "/deposits", label: "FD & RD", icon: Landmark },
   { to: "/bank-accounts", label: "Bank Accounts", icon: Building2 },
+  { to: "/compliance", label: "Compliance", icon: Lock },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 

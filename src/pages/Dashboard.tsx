@@ -4,7 +4,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
-import { Wallet, TrendingUp, Star, Shield, Bell, Check, Info, AlertTriangle } from "lucide-react";
+import { Wallet, TrendingUp, Star, Shield, Bell, Check, Info, AlertTriangle, ArrowRight } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 const CURRENCIES: Record<string, string> = { INR: "₹", USD: "$", EUR: "€", GBP: "£", AUD: "A$", CAD: "C$", SGD: "S$", AED: "د.إ", JPY: "¥" };
 
@@ -13,7 +14,7 @@ const DONUT_COLORS = ["hsl(217, 94%, 68%)", "hsl(270, 95%, 75%)", "hsl(166, 100%
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const navigate = useNavigate();
+  const navigate = useNavigate() as any;
   const [sym, setSym] = useState("₹");
   const [stats, setStats] = useState({ income: 0, expenses: 0, loans: 0, goals: 0, emergencyFund: 0, monthlySalary: 0, creditScore: 0, fullName: "" });
   const [chartData, setChartData] = useState<any[]>([]);
@@ -63,7 +64,27 @@ export default function Dashboard() {
       setStats({ income, expenses, loans, goals: (goalRes.data || []).length, emergencyFund, monthlySalary, creditScore, fullName });
       setGoalsList((goalRes.data || []).slice(0, 4));
 
-      if (monthlySalary > 0) {
+      // Build real expense breakdown by actual transaction categories
+      const categoryMap: Record<string, number> = {};
+      const categoryColors: Record<string, string> = {};
+      const categoryColorPalette = ["hsl(217, 94%, 68%)", "hsl(270, 95%, 75%)", "hsl(166, 100%, 45%)", "hsl(43, 96%, 56%)", "hsl(0, 91%, 71%)", "hsl(250, 95%, 65%)"];
+      
+      txs.filter(t => t.type === "expense").forEach((t, idx) => {
+        const cat = t.category || "Other";
+        categoryMap[cat] = (categoryMap[cat] || 0) + Number(t.amount);
+        if (!categoryColors[cat]) {
+          categoryColors[cat] = categoryColorPalette[Object.keys(categoryColors).length % categoryColorPalette.length];
+        }
+      });
+
+      if (Object.keys(categoryMap).length > 0) {
+        const expenseData = Object.entries(categoryMap)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map(([name, value]) => ({ name, value: Math.round(value), color: categoryColors[name] }));
+        setExpenseByCategory(expenseData);
+      } else if (monthlySalary > 0) {
+        // Fallback to 50/30/20 if no real expenses
         setExpenseByCategory([
           { name: "Needs", value: monthlySalary * 0.5, color: DONUT_COLORS[0] },
           { name: "Wants", value: monthlySalary * 0.3, color: DONUT_COLORS[1] },
@@ -98,16 +119,25 @@ export default function Dashboard() {
 
       setAlerts(newAlerts);
 
-      const last6 = Array.from({ length: 6 }, (_, i) => {
+      // Fetch last 6 months of transaction data for accurate trend
+      const last6Months = Array.from({ length: 6 }, (_, i) => {
         const d = new Date();
         d.setMonth(d.getMonth() - (5 - i));
-        const monthStr = d.toLocaleDateString("en", { month: "short" });
-        return { m: monthStr, income: Math.round(income * (0.8 + Math.random() * 0.4)), expense: Math.round(expenses * (0.8 + Math.random() * 0.4)) };
+        return {
+          start: new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split("T")[0],
+          end: new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split("T")[0],
+          m: d.toLocaleDateString("en", { month: "short" })
+        };
       });
-      if (income > 0 || expenses > 0) {
-        last6[5] = { m: now.toLocaleDateString("en", { month: "short" }), income, expense: expenses };
-      }
-      setChartData(last6);
+
+      const chartDataPoints = last6Months.map(month => {
+        const monthTxs = txs.filter(t => t.date >= month.start && t.date <= month.end);
+        const monthIncome = monthTxs.filter(t => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
+        const monthExpense = monthTxs.filter(t => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
+        return { m: month.m, income: Math.round(monthIncome), expense: Math.round(monthExpense) };
+      });
+
+      setChartData(chartDataPoints);
     };
     fetchStats();
   }, [user, navigate]);
@@ -142,6 +172,9 @@ export default function Dashboard() {
               Here's your financial pulse — {new Date().toLocaleDateString("en", { weekday: "long", day: "numeric", month: "short", year: "numeric" })}
             </p>
           </div>
+          <button onClick={() => navigate("/transactions")} className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl gradient-primary text-primary-foreground font-heading font-bold text-sm hover:shadow-[0_6px_22px_hsl(var(--primary)/0.32)] hover:-translate-y-0.5 transition-all">
+            View Transactions <ArrowRight className="h-4 w-4" />
+          </button>
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">

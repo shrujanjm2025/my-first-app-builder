@@ -1,6 +1,5 @@
 import { ReactNode, useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Wallet, PiggyBank, Target, CreditCard, Shield,
@@ -22,7 +21,6 @@ const navItems = [
 ];
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
-  const { signOut, user } = useAuth();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -83,7 +81,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         <div className="p-2.5 border-t border-border space-y-1">
           {!collapsed && (
             <div className="px-3 py-2.5 rounded-xl bg-secondary mb-2">
-              <div className="text-xs font-semibold truncate">{user?.email?.split("@")[0] || "User"}</div>
+              <div className="text-xs font-semibold truncate">Demo User</div>
               <div className="text-[11px] text-muted-foreground">Free Plan</div>
             </div>
           )}
@@ -96,11 +94,6 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             className="hidden lg:flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] text-muted-foreground hover:bg-secondary w-full transition-colors">
             <ChevronLeft className={cn("h-4 w-4 transition-transform", collapsed && "rotate-180")} />
             {!collapsed && "Collapse"}
-          </button>
-          <button onClick={signOut}
-            className={cn("flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] text-destructive hover:bg-destructive/10 w-full transition-colors", collapsed && "justify-center")}>
-            <LogOut className="h-4 w-4" />
-            {!collapsed && "Sign Out"}
           </button>
         </div>
       </aside>

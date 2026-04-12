@@ -1,125 +1,58 @@
-import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
-import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { Wallet, TrendingUp, Star, Shield, Bell, Check, Info, AlertTriangle } from "lucide-react";
 
-const CURRENCIES: Record<string, string> = { INR: "₹", USD: "$", EUR: "€", GBP: "£", AUD: "A$", CAD: "C$", SGD: "S$", AED: "د.إ", JPY: "¥" };
+const DONUT_COLORS = ["hsl(217, 94%, 68%)", "hsl(270, 95%, 75%)", "hsl(166, 100%, 45%)"];
+const sym = "₹";
+const fmtK = (n: number) => n >= 100000 ? `${sym}${(n / 100000).toFixed(1)}L` : n >= 1000 ? `${sym}${(n / 1000).toFixed(0)}K` : `${sym}${n}`;
+
+const mockStats = { income: 85000, expenses: 42000, loans: 350000, goals: 3, emergencyFund: 255000, monthlySalary: 85000, creditScore: 742, fullName: "Demo User" };
+
+const mockChartData = [
+  { m: "Nov", income: 78000, expense: 38000 },
+  { m: "Dec", income: 82000, expense: 41000 },
+  { m: "Jan", income: 80000, expense: 39000 },
+  { m: "Feb", income: 85000, expense: 44000 },
+  { m: "Mar", income: 83000, expense: 40000 },
+  { m: "Apr", income: 85000, expense: 42000 },
+];
+
+const mockExpenseByCategory = [
+  { name: "Needs", value: 42500, color: DONUT_COLORS[0] },
+  { name: "Wants", value: 25500, color: DONUT_COLORS[1] },
+  { name: "Savings", value: 17000, color: DONUT_COLORS[2] },
+];
+
+const mockGoals = [
+  { name: "Emergency Fund", current_amount: 180000, target_amount: 255000, target_date: "2026-08-01" },
+  { name: "Vacation Fund", current_amount: 25000, target_amount: 60000, target_date: "2026-12-15" },
+  { name: "New Laptop", current_amount: 45000, target_amount: 80000, target_date: "2026-06-30" },
+];
+
+const mockAlerts = [
+  { type: "g", msg: "Credit score at 742 — Good" },
+  { type: "y", msg: "Car insurance renews in 18 days" },
+  { type: "b", msg: "You're saving 50.6% of income this month — great!" },
+];
 
 const pct = (a: number, b: number) => b === 0 ? 0 : Math.round((a / b) * 100);
-const DONUT_COLORS = ["hsl(217, 94%, 68%)", "hsl(270, 95%, 75%)", "hsl(166, 100%, 45%)"];
 
 export default function Dashboard() {
-  const { user } = useAuth();
-  const navigate = useNavigate();
-  const [sym, setSym] = useState("₹");
-  const [stats, setStats] = useState({ income: 0, expenses: 0, loans: 0, goals: 0, emergencyFund: 0, monthlySalary: 0, creditScore: 0, fullName: "" });
-  const [chartData, setChartData] = useState<any[]>([]);
-  const [expenseByCategory, setExpenseByCategory] = useState<any[]>([]);
-  const [alerts, setAlerts] = useState<{ type: string; msg: string }[]>([]);
-  const [goalsList, setGoalsList] = useState<any[]>([]);
-
-  const fmtK = (n: number) => n >= 100000 ? `${sym}${(n / 100000).toFixed(1)}L` : n >= 1000 ? `${sym}${(n / 1000).toFixed(0)}K` : `${sym}${n}`;
-
-  useEffect(() => {
-    if (!user) return;
-    const fetchStats = async () => {
-      const now = new Date();
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
-
-      // Pull from users_financial_profile (primary) instead of profiles
-      const [txRes, loanRes, goalRes, fpRes, insuranceRes, budgetRes] = await Promise.all([
-        supabase.from("transactions").select("type, amount, date, category").eq("user_id", user.id).gte("date", startOfMonth),
-        supabase.from("loans").select("outstanding_balance, name, start_date, tenure_months, emi, interest_rate").eq("user_id", user.id),
-        supabase.from("goals").select("*").eq("user_id", user.id),
-        supabase.from("users_financial_profile").select("*").eq("id", user.id).single(),
-        supabase.from("insurance_policies").select("name, renewal_date").eq("user_id", user.id),
-        supabase.from("budgets").select("category, allocated_amount").eq("user_id", user.id).eq("month", startOfMonth),
-      ]);
-
-      const fp = fpRes.data;
-
-      // Redirect to onboarding if not complete
-      if (fp && !fp.onboarding_complete) {
-        navigate("/onboarding");
-        return;
-      }
-
-      const currency = fp?.currency || "INR";
-      setSym(CURRENCIES[currency] || "₹");
-
-      const txs = txRes.data || [];
-      const income = txs.filter(t => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
-      const expenses = txs.filter(t => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
-      const loans = (loanRes.data || []).reduce((s, l) => s + Number(l.outstanding_balance), 0);
-      const monthlySalary = Number(fp?.monthly_salary) || 0;
-      const needsMonthly = monthlySalary * 0.5;
-      const emergencyFund = needsMonthly * 6;
-      const creditScore = Number(fp?.credit_score) || 0;
-      const fullName = fp?.full_name || "";
-
-      setStats({ income, expenses, loans, goals: (goalRes.data || []).length, emergencyFund, monthlySalary, creditScore, fullName });
-      setGoalsList((goalRes.data || []).slice(0, 4));
-
-      if (monthlySalary > 0) {
-        setExpenseByCategory([
-          { name: "Needs", value: monthlySalary * 0.5, color: DONUT_COLORS[0] },
-          { name: "Wants", value: monthlySalary * 0.3, color: DONUT_COLORS[1] },
-          { name: "Savings", value: monthlySalary * 0.2, color: DONUT_COLORS[2] },
-        ]);
-      }
-
-      const newAlerts: { type: string; msg: string }[] = [];
-      const budgets = budgetRes.data || [];
-      const catMap: Record<string, number> = {};
-      txs.filter(t => t.type === "expense").forEach(t => { catMap[t.category] = (catMap[t.category] || 0) + Number(t.amount); });
-
-      budgets.forEach((b: any) => {
-        const spent = catMap[b.category] || 0;
-        if (spent > Number(b.allocated_amount)) {
-          newAlerts.push({ type: "y", msg: `Wants budget exceeded by ${CURRENCIES[currency]}${(spent - Number(b.allocated_amount)).toFixed(0)} on ${b.category}` });
-        }
-      });
-
-      (insuranceRes.data || []).forEach((p: any) => {
-        if (p.renewal_date) {
-          const renewal = new Date(p.renewal_date);
-          const daysUntil = (renewal.getTime() - Date.now()) / (24 * 3600 * 1000);
-          if (daysUntil < 0) newAlerts.push({ type: "r", msg: `${p.name} insurance is OVERDUE for renewal` });
-          else if (daysUntil < 30) newAlerts.push({ type: "y", msg: `${p.name} insurance renews in ${Math.ceil(daysUntil)} days` });
-        }
-      });
-
-      if (creditScore > 0) {
-        newAlerts.push({ type: "g", msg: `Credit score at ${creditScore} — ${creditScore >= 750 ? "Excellent" : creditScore >= 650 ? "Good" : "Needs work"}` });
-      }
-
-      setAlerts(newAlerts);
-
-      const last6 = Array.from({ length: 6 }, (_, i) => {
-        const d = new Date();
-        d.setMonth(d.getMonth() - (5 - i));
-        const monthStr = d.toLocaleDateString("en", { month: "short" });
-        return { m: monthStr, income: Math.round(income * (0.8 + Math.random() * 0.4)), expense: Math.round(expenses * (0.8 + Math.random() * 0.4)) };
-      });
-      if (income > 0 || expenses > 0) {
-        last6[5] = { m: now.toLocaleDateString("en", { month: "short" }), income, expense: expenses };
-      }
-      setChartData(last6);
-    };
-    fetchStats();
-  }, [user, navigate]);
+  const stats = mockStats;
+  const chartData = mockChartData;
+  const expenseByCategory = mockExpenseByCategory;
+  const goalsList = mockGoals;
+  const alerts = mockAlerts;
 
   const savings = stats.income - stats.expenses;
   const savingsRate = stats.income > 0 ? ((savings / stats.income) * 100).toFixed(1) : "0";
 
   const statCards = [
-    { label: "Monthly Income", value: fmtK(stats.income), sub: new Date().toLocaleDateString("en", { month: "short", year: "numeric" }), color: "primary", icon: Wallet, chip: stats.income > 0 ? "Active" : undefined },
-    { label: "Total Expenses", value: fmtK(stats.expenses), sub: `of ${fmtK(stats.monthlySalary || stats.income)} budgeted`, color: "accent", icon: TrendingUp },
-    { label: "Net Savings", value: fmtK(Math.max(0, savings)), sub: `${savingsRate}% savings rate`, color: "gold", icon: Star, chip: Number(savingsRate) >= 20 ? "On track" : undefined },
-    { label: "Credit Score", value: stats.creditScore > 0 ? String(stats.creditScore) : "—", sub: stats.creditScore >= 750 ? "Excellent range" : stats.creditScore >= 650 ? "Good" : "Set in settings", color: "destructive", icon: Shield },
+    { label: "Monthly Income", value: fmtK(stats.income), sub: "Apr 2026", color: "primary", icon: Wallet, chip: "Active" },
+    { label: "Total Expenses", value: fmtK(stats.expenses), sub: `of ${fmtK(stats.monthlySalary)} budgeted`, color: "accent", icon: TrendingUp },
+    { label: "Net Savings", value: fmtK(Math.max(0, savings)), sub: `${savingsRate}% savings rate`, color: "gold", icon: Star, chip: "On track" },
+    { label: "Credit Score", value: String(stats.creditScore), sub: "Good range", color: "destructive", icon: Shield },
   ];
 
   const alertIcons: Record<string, any> = { r: AlertTriangle, y: AlertTriangle, g: Check, b: Info };
@@ -136,7 +69,7 @@ export default function Dashboard() {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="font-heading text-[26px] font-extrabold">
-              Good {new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening"}, {stats.fullName?.split(" ")[0] || "there"} 👋
+              Good {new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening"}, {stats.fullName.split(" ")[0]} 👋
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
               Here's your financial pulse — {new Date().toLocaleDateString("en", { weekday: "long", day: "numeric", month: "short", year: "numeric" })}
@@ -167,33 +100,27 @@ export default function Dashboard() {
           <div className="bg-card border border-border rounded-2xl p-5">
             <h3 className="font-heading text-sm font-bold mb-1">Budget Allocation</h3>
             <p className="text-xs text-muted-foreground mb-4">50/30/20 rule</p>
-            {expenseByCategory.length > 0 ? (
-              <>
-                <ResponsiveContainer width="100%" height={160}>
-                  <PieChart>
-                    <Pie data={expenseByCategory} cx="50%" cy="50%" innerRadius={48} outerRadius={70} paddingAngle={3} dataKey="value">
-                      {expenseByCategory.map((d, i) => <Cell key={i} fill={d.color} />)}
-                    </Pie>
-                    <Tooltip content={({ active, payload }) => active && payload?.length ? (
-                      <div className="bg-secondary border border-border rounded-xl px-3 py-2 text-xs">
-                        <span style={{ color: payload[0].payload.color }}>{payload[0].name}: {fmtK(Number(payload[0].value))}</span>
-                      </div>
-                    ) : null} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="flex flex-col gap-2 mt-2">
-                  {expenseByCategory.map((d, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: d.color }} />
-                      <span className="text-xs text-muted-foreground flex-1">{d.name}</span>
-                      <span className="font-mono text-xs">{fmtK(d.value)}</span>
-                    </div>
-                  ))}
+            <ResponsiveContainer width="100%" height={160}>
+              <PieChart>
+                <Pie data={expenseByCategory} cx="50%" cy="50%" innerRadius={48} outerRadius={70} paddingAngle={3} dataKey="value">
+                  {expenseByCategory.map((d, i) => <Cell key={i} fill={d.color} />)}
+                </Pie>
+                <Tooltip content={({ active, payload }) => active && payload?.length ? (
+                  <div className="bg-secondary border border-border rounded-xl px-3 py-2 text-xs">
+                    <span style={{ color: payload[0].payload.color }}>{payload[0].name}: {fmtK(Number(payload[0].value))}</span>
+                  </div>
+                ) : null} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="flex flex-col gap-2 mt-2">
+              {expenseByCategory.map((d, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: d.color }} />
+                  <span className="text-xs text-muted-foreground flex-1">{d.name}</span>
+                  <span className="font-mono text-xs">{fmtK(d.value)}</span>
                 </div>
-              </>
-            ) : (
-              <div className="flex items-center justify-center h-40 text-sm text-muted-foreground">Set salary in settings</div>
-            )}
+              ))}
+            </div>
           </div>
 
           <div className="bg-card border border-border rounded-2xl p-5">
@@ -231,8 +158,8 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="bg-card border border-border rounded-2xl p-5">
             <h3 className="font-heading text-sm font-bold mb-4">SMART Goals</h3>
-            {goalsList.length > 0 ? goalsList.map((g, i) => {
-              const progress = pct(Number(g.current_amount), Number(g.target_amount));
+            {goalsList.map((g, i) => {
+              const progress = pct(g.current_amount, g.target_amount);
               return (
                 <div key={i} className="mb-3.5">
                   <div className="flex justify-between mb-1.5">
@@ -240,8 +167,8 @@ export default function Dashboard() {
                     <span className="text-[11px] text-muted-foreground">Due {new Date(g.target_date).toLocaleDateString("en", { month: "short", day: "numeric" })}</span>
                   </div>
                   <div className="flex justify-between mb-1">
-                    <span className="font-mono text-[11px] text-primary">{fmtK(Number(g.current_amount))}</span>
-                    <span className="font-mono text-[11px] text-muted-foreground">{fmtK(Number(g.target_amount))}</span>
+                    <span className="font-mono text-[11px] text-primary">{fmtK(g.current_amount)}</span>
+                    <span className="font-mono text-[11px] text-muted-foreground">{fmtK(g.target_amount)}</span>
                   </div>
                   <div className="h-[5px] bg-muted rounded-full overflow-hidden">
                     <div className="h-full rounded-full transition-all duration-1000" style={{
@@ -251,16 +178,14 @@ export default function Dashboard() {
                   </div>
                 </div>
               );
-            }) : (
-              <p className="text-sm text-muted-foreground">No goals set yet. Add goals to track progress.</p>
-            )}
+            })}
           </div>
 
           <div className="bg-card border border-border rounded-2xl p-5">
             <h3 className="font-heading text-sm font-bold mb-4 flex items-center gap-2">
               <Bell className="h-4 w-4 text-[hsl(var(--warning))]" /> Smart Alerts
             </h3>
-            {alerts.length > 0 ? alerts.map((a, i) => {
+            {alerts.map((a, i) => {
               const AlertIcon = alertIcons[a.type] || Info;
               return (
                 <div key={i} className={`flex items-start gap-2.5 p-3 rounded-xl mb-2.5 border text-[13px] leading-relaxed ${alertStyles[a.type] || alertStyles.b}`}>
@@ -268,9 +193,7 @@ export default function Dashboard() {
                   <span>{a.msg}</span>
                 </div>
               );
-            }) : (
-              <p className="text-sm text-muted-foreground">No alerts right now. Everything looks good! ✅</p>
-            )}
+            })}
           </div>
         </div>
       </div>

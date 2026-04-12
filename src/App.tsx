@@ -3,10 +3,6 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider, ProtectedRoute } from "@/hooks/useAuth";
-import Auth from "./pages/Auth";
-import ResetPassword from "./pages/ResetPassword";
-import Onboarding from "./pages/Onboarding";
 import Dashboard from "./pages/Dashboard";
 import Budgets from "./pages/Budgets";
 import Goals from "./pages/Goals";
@@ -27,25 +23,20 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <AuthProvider>
-          <Routes>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
-            <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-            <Route path="/budgets" element={<ProtectedRoute><Budgets /></ProtectedRoute>} />
-            <Route path="/goals" element={<ProtectedRoute><Goals /></ProtectedRoute>} />
-            <Route path="/loans" element={<ProtectedRoute><Loans /></ProtectedRoute>} />
-            <Route path="/insurance" element={<ProtectedRoute><Insurance /></ProtectedRoute>} />
-            <Route path="/credit-score" element={<ProtectedRoute><CreditScore /></ProtectedRoute>} />
-            <Route path="/bank-accounts" element={<ProtectedRoute><BankAccounts /></ProtectedRoute>} />
-            <Route path="/deposits" element={<ProtectedRoute><Deposits /></ProtectedRoute>} />
-            <Route path="/retirement" element={<ProtectedRoute><Retirement /></ProtectedRoute>} />
-            <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </AuthProvider>
+        <Routes>
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/budgets" element={<Budgets />} />
+          <Route path="/goals" element={<Goals />} />
+          <Route path="/loans" element={<Loans />} />
+          <Route path="/insurance" element={<Insurance />} />
+          <Route path="/credit-score" element={<CreditScore />} />
+          <Route path="/bank-accounts" element={<BankAccounts />} />
+          <Route path="/deposits" element={<Deposits />} />
+          <Route path="/retirement" element={<Retirement />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
